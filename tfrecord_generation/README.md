@@ -16,7 +16,7 @@ python ./convert_collection_to_tfrecord.py \
   --doc_type doc\
   --corpus msmarco
 # Convert queries in dev set
-python dl4marco-bert/convert_collection_to_tfrecord.py \
+python ./convert_collection_to_tfrecord.py \
   --output_folder=${DATA_DIR}/tfrecord \
   --vocab_file=${MODEL_DIR}/vocab.txt \
   --max_seq_length=36 \ #32 plus 4 tokens '[CLS]', '[', 'Q', ']'

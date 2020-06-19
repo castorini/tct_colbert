@@ -63,12 +63,12 @@ result_file=./prediction/rank_result.tsv
 ###############################################
 # indexing (Turn on "quantize" option with faster search and space saving)
 python index.py --num_files 10 --index_file $index_file \
-     --topk $topk --emb_path $emb_path --data_type $data_type\
+     --topk $topk --emb_path $emb_path --data_type 32 \ #Faiss only accept 32 bits for indexing
      --query_word_num $query_word_num --doc_word_num $doc_word_num --emb_dim $emb_dim
      #--quantize
 # First-stage search with faiss
 python search.py --num_files 10 --index_file $index_file --pickle_file $first_stage_path/result.pickle\
-    --topk $topk --emb_path $emb_path --data_type $data_type\
+    --topk $topk --emb_path $emb_path --data_type 32 \ #Faiss only accept 32 bits for indexing
     --query_word_num $query_word_num --doc_word_num $doc_word_num --emb_dim $emb_dim
 # Output final result (Turn on "rerank" option if you want to rerank over the first-stage search result. For pooling embedding, we do not have to do that.)
 python output_result.py --topk $topk --emb_path $emb_path --data_type $data_type --first_stage_path $first_stage_path\

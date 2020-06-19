@@ -10,23 +10,6 @@ from progressbar import *
 from collections import defaultdict
 
 
-def dedupe_index(Index, Distance):
-    NewIndex=[]
-    max_index_num = 0
-    min_index_num = 10000000
-    doc_num=0
-    sort_index=np.argsort(Distance)[:,::-1]
-    for i, index in enumerate(Index):
-        sort_id = index[sort_index[i].tolist()]
-        uniq_indices=np.sort(np.unique(sort_id,return_index=True)[1]).tolist()#the index for dedupe
-        max_index_num = max(max_index_num, len(uniq_indices))
-        min_index_num  = min(min_index_num, len(uniq_indices))
-        doc_num+=len(uniq_indices)
-        NewIndex.append(sort_id[uniq_indices].tolist())
-    print("Maximum unique doc id is %d after dedupe"%(max_index_num))
-    print("Minimum unique doc id is %d after dedupe"%(min_index_num))
-    print("Average unique doc id is %d after dedupe"%(doc_num/Index.shape[0]))
-    return NewIndex, max_index_num
 def read_pickle(filename):
     with open(filename, 'rb') as f:
         Distance, Index=pickle.load(f)
@@ -53,10 +36,10 @@ def load_tfrecords(srcfiles, data_num, word_num, dim, data_type='16', batch=1000
         features = {'doc_emb': tf.FixedLenFeature([],tf.string),
                   'docid': tf.FixedLenFeature([],tf.int64)}
         parsed_features = tf.parse_single_example(example_proto, features)
-        if data_type=='16':
-            corpus = tf.decode_raw(parsed_features['doc_emb'], tf.float16)
-        elif data_type=='32':
-            corpus = tf.decode_raw(parsed_features['doc_emb'], tf.float32)
+        # if data_type=='16':
+        corpus = tf.decode_raw(parsed_features['doc_emb'], tf.float16)
+        # elif data_type=='32':
+        #     corpus = tf.decode_raw(parsed_features['doc_emb'], tf.float32)
         docid = tf.cast(parsed_features['docid'], tf.int32)
         return corpus, docid
 

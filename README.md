@@ -44,7 +44,7 @@ Results  | Dev
 MRR10            | 0.3098
 mAP              | 0.3140
 Recall@1000      | 0.8140
-Latency (query/s)| 0.0070
+Latency (s/query)| 0.0070
 
 End to End Passage Retrieval
 ---
@@ -87,7 +87,7 @@ Results  | Dev
 MRR10            | 0.3013
 mAP              | 0.3082
 Recall@1000      | 0.9401
-Latency (query/s)| 0.1000
+Latency (s/query)| 0.1000
 
 
 ColBERT Passage Re-ranking reproduce

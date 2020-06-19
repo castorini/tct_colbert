@@ -11,7 +11,7 @@ pip install faiss
 pip install faiss-gpu
 pip install progressbar
 
-Passage Re-ranking
+Passage Re-ranking with max min pooling embeeding
 ---
 Here, we use max-min pooling embedding with dimension 768 to represent each query and passage.
 ```shell=bash
@@ -46,14 +46,7 @@ mAP              | 0.3140
 Recall@1000      | 0.8140
 Latency (query/s)| 0.0070
 
-As for contextual word embedding (ColBERT), we currently conduct re-ranking on colab TPU since it consumes much storage space.
-Results  | Dev
-------------| :------:
-MRR10            | 0.3504
-mAP              | 0.3531
-Recall@1000      | 0.8140
-
-End to End Passage Retrieval with max min pooling embeeding
+End to End Passage Retrieval
 ---
 ```shell=bash
 mkdir prediction index
@@ -95,3 +88,13 @@ MRR10            | 0.3013
 mAP              | 0.3082
 Recall@1000      | 0.9401
 Latency (query/s)| 0.1000
+
+
+ColBERT Passage Re-ranking reproduce
+---
+As for re-ranking with contextual word embedding matching , we currently only conduct re-ranking on colab TPU since it consumes much storage space (Each query and document are represented with embedding size 128\*32 and 128\*150 respectively).
+Results  | Dev
+------------| :------:
+MRR10            | 0.3504
+mAP              | 0.3531
+Recall@1000      | 0.8140

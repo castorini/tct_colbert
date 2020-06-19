@@ -1,6 +1,16 @@
 # Embeeding Search for IR
 Here, we conduct the experiments using Siamese BERT-base model. The maximum query and passage lengths are set to 32 and 150 (not including special tokens) respectively. For each query (document), we also put \[CLS\] and \[Q\](\[D\]) in the beginning. For the queries no longer than length of 32, we pad them with \[MASK\] tokens.
 
+Requirement
+---
+pip install mkl
+conda install mkl-service --no-update-dependencies
+pip install tensorflow-gpu
+pip install numpy
+pip install faiss
+pip install faiss-gpu
+pip install progressbar
+
 Passage Re-ranking
 ---
 Here, we use max-min pooling embedding with dimension 768 to represent each query and passage.

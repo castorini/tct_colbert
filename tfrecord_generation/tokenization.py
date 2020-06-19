@@ -23,9 +23,9 @@ import unicodedata
 import six
 # import tensorflow as tf
 import tensorflow.compat.v1 as tf
-import spacy
-nlp = spacy.load('en', parser = False)
-from text_process import pre_proc, process
+# import spacy
+# nlp = spacy.load('en', parser = False)
+# from text_process import pre_proc, process
 
 def convert_to_bert_input(text, max_seq_length, tokenizer, add_cls):
 
@@ -66,7 +66,7 @@ def convert_to_colbert_input(text, max_seq_length, tokenizer, add_cls, filtering
 
   tokens = tokenizer.tokenize(text)
 
-  
+
   # Account for [CLS] and [SEP] with "- 2"
   if len(tokens) > max_seq_length - 1:
     tokens = tokens[:max_seq_length - 1]
@@ -135,7 +135,7 @@ def convert_seqs_to_bert_input(docs, max_seq_length, tokenizer, add_cls, max_sen
   sent_segment=[]
   start_pos=[]
   sent_start = 1 #CLS should be excluded
-  sent_num = 0 
+  sent_num = 0
   for i, doc in enumerate(docs):
     doc=convert_to_unicode(str(doc))
     doc = tokenizer.tokenize(doc)
@@ -149,7 +149,7 @@ def convert_seqs_to_bert_input(docs, max_seq_length, tokenizer, add_cls, max_sen
     start_pos.append(sent_start)
     sent_start=sent_end
     sent_num+=1
-  
+
   if sent_num>=max_sent:
     sent_segment = sent_segment[:max_sent]
     start_pos = start_pos[:max_sent]
@@ -160,7 +160,7 @@ def convert_seqs_to_bert_input(docs, max_seq_length, tokenizer, add_cls, max_sen
   # Account for [CLS] and [SEP] with "- 2"
   if len(tokens) > max_seq_length - 2:
     tokens = tokens[:max_seq_length - 2]
-  
+
   # The convention in BERT is:
   # (a) For sequence pairs:
   #  tokens:   [CLS] is this jack ##son ##ville ? [SEP] no it is not . [SEP]

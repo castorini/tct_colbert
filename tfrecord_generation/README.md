@@ -27,10 +27,10 @@ python dl4marco-bert/convert_collection_to_tfrecord.py \
 
 Convert First-stage retrieval candidate for TPU re-ranking
 ---
+```shell=bash
 DATA_DIR=./msmarco-passage
 MODEL_DIR=./uncased_L-12_H-768_A-12
 mkdir ${DATA_DIR}/tfrecord
-```shell=bash
 python ./convert_msmarco_to_tfrecord_tower.py \
   --output_folder=${DATA_DIR}/tfrecord \
   --vocab_file=${MODEL_DIR}/vocab.txt \

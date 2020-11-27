@@ -7,16 +7,16 @@ tensorflow-gpu, faiss-gpu, progressbar
 
 Passage Re-ranking with TCT-ColBERT embeeding
 ---
-Here, we use average pooling embedding with dimension 768 (with 32 bits) to represent each query and passage. For re-ranking, we currently use CPU for dot product computation.
+Here, we use average pooling embedding with dimension 768 (with 32 bits) to represent each query and passage. For re-ranking, we currently use CPU for dot product computation. First Store your query and passage embeddings tf record in the folders query_emb and corpus_emb respectively, and put re-ranking candidiate qrel and id_to_query files in the current folder.
 ```shell=bash
-mkdir embeddings prediction
-candidate_file=msmarco-passage/top1000.dev.tsv
-answer_file=msmarco-passage/qrels.dev.small.tsv
+mkdir prediction
+candidate_file=top1000.dev.tsv
+qerl_file=qrels.dev.small.tsv
 topk=1000
 data_type=32 # 16 or 32 bits for embedding storage
-emb_path=embeddings
-query_emb=$emb_path\/query_emb/queries.doc.dev00.tf
-corpus_emb=$emb_path\/corpus_emb/msmarco0
+query_emb=./query_emb/queries.doc.dev00.tf
+corpus_emb=./corpus_emb/msmarco0
+id_to_query=./queries.dev.small.id
 result_file=./prediction/rerank_result
 ###############################################
 result_file=./prediction/rerank_result
@@ -41,9 +41,8 @@ Latency (s/query)| 0.0070
 
 End to End Passage Retrieval with TCT-ColBERT embeeding.
 ---
-Indexing all MSMARCO passages in a file (Exhuasive search) requires 26 GB. For example, if only 4GB GPU is available for search, you can set max_passage_each_index to 1000,000 and 8 indexing files will be generated. Then, we search each index for topk passages, and merge and sort them to get the final ranking result.
+Indexing all MSMARCO passages in a file (Exhuasive search) requires 26 GB. For example, if only 4GB GPU is available for search, you can set max_passage_each_index to 1000,000 and 8 indexing files will be generated. Then, we search each index for topk passages, and merge and sort them to get the final ranking result. Here, we use average pooling embedding with dimension 768 (with 32 bits) to represent each query and passage. Similar to re-ranking, first store your query and passage embeddings tf record in the folders query_emb and corpus_emb respectively, and put qrel and id_to_query files in the current folder.
 ```shell=bash
-# First Store your query and passage embeddings tf record in embeddings/query_emb and embeddings/corpus_emb respectively.
 mkdir prediction indexes
 qerl_file=msmarco-passage/qrels.dev.small.tsv
 topk=1000
@@ -54,9 +53,9 @@ data_type=32 # 16 or 32 bits for embedding storage
 corpus_type=passage #doc
 index_file=indexes/msmarco_$corpus_type
 gpu_device=0
-emb_path=embeddings
-query_emb=$emb_path\/query_emb/queries.doc.dev00.tf
-corpus_emb=$emb_path\/corpus_emb/msmarco0
+query_emb=./query_emb/queries.doc.dev00.tf
+corpus_emb=./corpus_emb/msmarco0
+id_to_query=./queries.dev.small.id
 first_stage_path=first_stage_result
 result_file=./prediction/rank_result
 ###############################################

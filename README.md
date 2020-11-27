@@ -1,5 +1,5 @@
 # Embeeding Search for IR
-Here, we conduct the experiments using Siamese BERT-base model. The maximum query and passage lengths are set to 32 and 150 (not including special tokens) respectively. For each query (document), we also put \[CLS\] and \[Q\](\[D\]) in the beginning. For the queries no longer than length of 32, we pad them with \[MASK\] tokens.
+Here, we conduct the experiments using Siamese BERT-base model. The maximum query and passage lengths are set to 32 and 150 (not including special tokens) respectively. For each query (document), we also put \[CLS\] and \[Q\](\[D\]) in the beginning. For the queries no longer than length of 32, we pad them with \[MASK\] tokens. Here, we use average pooling embedding with dimension 768 (with 32 bits) to represent each query and passage.
 
 Requirement
 ---
@@ -7,7 +7,7 @@ tensorflow-gpu, faiss-gpu, progressbar
 
 Passage Re-ranking with TCT-ColBERT embeeding
 ---
-Here, we use average pooling embedding with dimension 768 (with 32 bits) to represent each query and passage. For re-ranking, we currently use CPU for dot product computation. First Store your query and passage embeddings tf record in the folders query_emb and corpus_emb respectively, and put re-ranking candidiate qrel and id_to_query files in the current folder.
+For re-ranking, we currently use CPU for dot product computation. First Store your query and passage embeddings tf record in the folders query_emb and corpus_emb respectively, and put re-ranking candidiate qrel and id_to_query files in the current folder.
 ```shell=bash
 mkdir prediction
 candidate_file=top1000.dev.tsv

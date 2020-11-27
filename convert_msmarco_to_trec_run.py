@@ -27,7 +27,10 @@ if __name__ == '__main__':
 
     with open(args.output_run, 'w') as fout:
         for line in open(args.input_run):
-            query_id, doc_id, rank = line.strip().split('\t')
+            try:
+                query_id, doc_id, rank, _ = line.strip().split('\t')
+            except:
+                query_id, doc_id, rank = line.strip().split('\t')
             score = 1.0 / int(rank)
             fout.write('{} Q0 {} {} {} ANSERINI\n'.format(
                 query_id, doc_id, rank, score))

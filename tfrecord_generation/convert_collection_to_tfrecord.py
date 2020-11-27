@@ -9,6 +9,7 @@ import tensorflow as tf
 import time
 # local module
 import tokenization
+import math
 # import spacy; from spacy.lang.en import English; nlp = English()
 # nlp.add_pipe(nlp.create_pipe('sentencizer'))
 
@@ -33,6 +34,12 @@ flags.DEFINE_string(
     "Path to the MSMARCO training dataset containing the tab separated "
     "<query, positive_paragraph, negative_paragraph> tuples.")
 
+flags.DEFINE_bool(
+    "dry_run",
+    False,
+    "Path to the MSMARCO training dataset containing the tab separated "
+    "<query, positive_paragraph, negative_paragraph> tuples.")
+
 flags.DEFINE_string(
     "corpus_path",
     "./data/top1000.dev.tsv",
@@ -54,29 +61,18 @@ flags.DEFINE_integer(
     "num_eval_docs", 1000,
     "The maximum number of docs per query for dev and eval sets.")
 
+flags.DEFINE_integer(
+    "max_seg", 1,
+    "The maximum number of docs per query for dev and eval sets.")
+
 
 def write_to_tf_record(writer, tokenizer, doc_text,
                       docid, doc_type):
-  # doc = tokenization.convert_to_unicode(doc)
-  # doc_token_ids = tokenization.convert_to_bert_input(
-  #     text=doc, max_seq_length=FLAGS.max_seq_length, tokenizer=tokenizer,
-  #     add_cls=True)
-
-  # docs=[]
-  # try:
-  #   for doc in nlp(doc_text).sents:
-  #     docs.append(doc)
-  # except:
-  #   print(doc_text+ ' cannot be sentenized')
-  #   docs.append(doc_text)
-
-  # doc_token_ids, sent_segment, start_pos, sent_num = tokenization.convert_seqs_to_bert_input(
-  #       docs=docs,
-  #       max_seq_length=FLAGS.max_seq_length,
-  #       tokenizer=tokenizer,
-  #       add_cls=True)
-
-  if doc_type=="doc":
+  if doc_type=='doc':
+    doc_ids, _ = tokenization.convert_to_colbert_input(
+        text=['[','d',']']+doc_text, max_seq_length=FLAGS.max_seq_length, tokenizer=tokenizer,
+        add_cls=True, filtering=False, padding_mask=False, tokenize=False)
+  elif doc_type=="passage":
     doc_ids, _ = tokenization.convert_to_colbert_input(
         text='[D] '+doc_text, max_seq_length=FLAGS.max_seq_length, tokenizer=tokenizer,
         add_cls=True, filtering=False, padding_mask=False)
@@ -89,14 +85,6 @@ def write_to_tf_record(writer, tokenizer, doc_text,
   doc_ids_tf = tf.train.Feature(
       int64_list=tf.train.Int64List(value=doc_ids))
 
-  # sent_segment_tf = tf.train.Feature(
-  #     int64_list=tf.train.Int64List(value=sent_segment))
-
-  # start_pos_tf = tf.train.Feature(
-  #     int64_list=tf.train.Int64List(value=start_pos))
-
-  # sent_num_tf = tf.train.Feature(
-  #     int64_list=tf.train.Int64List(value=[sent_num]))
 
   docid_tf = tf.train.Feature(
       int64_list=tf.train.Int64List(value=[docid]))
@@ -104,16 +92,18 @@ def write_to_tf_record(writer, tokenizer, doc_text,
 
   features = tf.train.Features(feature={
       'doc_ids': doc_ids_tf,
-      # 'sent_segment': sent_segment_tf,
-      # 'sent_start_pos': start_pos_tf,
-      # 'sent_num': sent_num_tf,
       'docid': docid_tf,
   })
   example = tf.train.Example(features=features)
   writer.write(example.SerializeToString())
 
 
-def convert_corpus(corpus, tokenizer, doc_type):
+def convert_passage_corpus(corpus, tokenizer, doc_type):
+  print('Counting number of documents...')
+  num_lines = sum(1 for line in open(FLAGS.corpus_path, 'r'))
+  print('{} passages found.'.format(num_lines))
+  remain = num_lines%40
+
   print('Converting {} to tfrecord...'.format(FLAGS.corpus_path))
   start_time = time.time()
   docids=[]
@@ -134,40 +124,8 @@ def convert_corpus(corpus, tokenizer, doc_type):
         docids.append(docid)
         docs.append(doc)
 
-  # if set_name == 'dev':
-  #   dataset_path = FLAGS.dev_dataset_path
-  #   relevant_pairs = set()
-  #   with open(FLAGS.dev_qrels_path) as f:
-  #     for line in f:
-  #       query_id, _, doc_id, _ = line.strip().split('\t')
-  #       relevant_pairs.add('\t'.join([query_id, doc_id]))
-  # else:
-  #   dataset_path = FLAGS.eval_dataset_path
-
-  # queries_docs = collections.defaultdict(list)
-  # query_ids = {}
-  # with open(dataset_path, 'r') as f:
-  #   for i, line in enumerate(f):
-  #     query_id, doc_id, query, doc = line.strip().split('\t')
-  #     label = 0
-  #     if set_name == 'dev':
-  #       if '\t'.join([query_id, doc_id]) in relevant_pairs:
-  #         label = 1
-  #     queries_docs[query].append((doc_id, doc, label))
-  #     query_ids[query] = query_id
-
-  # # Add fake paragraphs to the queries that have less than FLAGS.num_eval_docs.
-  # queries = list(queries_docs.keys())  # Need to copy keys before iterating.
-  # for query in queries:
-  #   docs = queries_docs[query]
-  #   docs += max(
-  #       0, FLAGS.num_eval_docs - len(docs)) * [('00000000', 'FAKE DOCUMENT', 0)]
-  #   queries_docs[query] = docs
-
-  # assert len(
-  #     set(len(docs) == FLAGS.num_eval_docs for docs in queries_docs.values())) == 1, (
-  #         'Not all queries have {} docs'.format(FLAGS.num_eval_docs))
   counter=0
+  id_writer = open(FLAGS.output_folder + '/'+ corpus + '.id', 'w')
   writer = tf.python_io.TFRecordWriter(
       FLAGS.output_folder + '/'+ corpus + str(counter) +'.tf')
 
@@ -176,10 +134,10 @@ def convert_corpus(corpus, tokenizer, doc_type):
     write_to_tf_record(writer=writer,
                        tokenizer=tokenizer,
                        doc_text=doc,
-                       docid=docids[i],
+                       docid=i,
                        doc_type=doc_type)
 
-
+    id_writer.write('%d\t%s\n'%(i,docids[i]))
     if (i+1) % 1000000 == 0:
       print('Writing {} corpus, doc {} of {}'.format(
           corpus, i, len(docs)))
@@ -188,15 +146,131 @@ def convert_corpus(corpus, tokenizer, doc_type):
           len(docs) - i) * time_passed / (max(1.0, i) * 3600)
       print('Estimated hours remaining to write the {} corpus: {}'.format(
           corpus, hours_remaining))
-    if (i+1) % 8841800 == 0:
+    if (i+1) % (num_lines-remain) == 0: #8841800
       writer.close()
       counter+=1
       writer = tf.python_io.TFRecordWriter(
         FLAGS.output_folder + '/'+ corpus + str(counter) +'.tf')
   writer.close()
+  id_writer.close()
+
+
+def convert_doc_corpus(corpus, tokenizer, doc_type, seg_length, max_seg, add_title=True, add_url=False):
+
+  def aggregate_passages(doc, seg_length):
+    passages = []
+    tokens = tokenizer.tokenize(doc)
+    token_len = len(tokens)
+    seg_num = math.ceil(token_len/seg_length)
+    for i in range(seg_num):
+      passages.append(tokens[i*seg_length:(i+1)*seg_length])
+    return passages
+
+  print('Converting {} to tfrecord...'.format(FLAGS.corpus_path))
+
+  print('Counting number of documents...')
+  num_lines = sum(1 for line in open(FLAGS.corpus_path, 'r'))
+  print('{} documents found.'.format(num_lines))
+  start_time = time.time()
+
+  if not FLAGS.dry_run:
+    counter=0
+    writer = tf.python_io.TFRecordWriter(
+        FLAGS.output_folder + '/'+ corpus + str(counter) +'.tf')
+    id_writer = open(FLAGS.output_folder + '/'+ corpus + '.id', 'w')
+    num_id=0
+    with open(FLAGS.corpus_path) as f:
+      for doc_num, line in enumerate(f):
+
+        docid, url, title, doc = line.split('\t')
+        doc = doc.strip()
+
+
+        if doc=='' and title=='':
+          continue
+
+
+        if add_title:
+          doc = title + ' ' + doc
+        if add_url:
+          doc = url + ' ' + doc
+
+
+        passages = aggregate_passages(doc, seg_length-4)
+
+        # if len(passages)>1:
+        #   print('check')
+
+        for passage in passages[:max_seg]:
+          write_to_tf_record(writer=writer,
+                             tokenizer=tokenizer,
+                             doc_text=passage,
+                             docid=num_id,
+                             doc_type=doc_type)
+
+          id_writer.write('%d\t%s\n'%(num_id, docid))
+          if (num_id+1) % 1000000 == 0:
+            print('Writing {} corpus, doc {}, passage {} of {}'.format(
+                corpus, doc_num, num_id, num_lines))
+            time_passed = time.time() - start_time
+            hours_remaining = (
+                num_lines - doc_num) * time_passed / (max(1.0, doc_num) * 3600)
+            print('Estimated hours remaining to write the {} corpus: {}'.format(
+                corpus, hours_remaining))
+
+          num_id+=1
+
+          if (((num_id+1) % 23654360) == 0): #(chunk_len, max_seg): (154X16) 23654360+19 (256X8)
+            print('New')
+            writer.close()
+            counter+=1
+            writer = tf.python_io.TFRecordWriter(
+              FLAGS.output_folder + '/'+ corpus + str(counter) +'.tf')
+      writer.close()
+      id_writer.close()
+      print('total '+ str(num_id) + ' passages')
+      print('finish')
+  else:
+    counter=0
+    num_id=0
+    with open(FLAGS.corpus_path) as f:
+      for doc_num, line in enumerate(f):
+
+        docid, url, title, doc = line.split('\t')
+        doc = doc.strip()
+
+
+        if doc=='' and title=='':
+          continue
+
+
+        if add_title:
+          doc = title + ' ' + doc
+        if add_url:
+          doc = url + ' ' + doc
+
+
+        passages = aggregate_passages(doc, seg_length-4)
+
+
+        for passage in passages[:max_seg]:
+
+          if (num_id+1) % 1000000 == 0:
+            print('Writing {} corpus, doc {}, passage {} of {}'.format(
+                corpus, doc_num, num_id, num_lines))
+            time_passed = time.time() - start_time
+            hours_remaining = (
+                num_lines - doc_num) * time_passed / (max(1.0, doc_num) * 3600)
+            print('Estimated hours remaining to write the {} corpus: {}'.format(
+                corpus, hours_remaining))
+
+          num_id+=1
 
 
 
+      print('total '+ str(num_id) + ' passages')
+      print('split '+ str(num_id-num_id%40) + '/' + str(num_id%40) + ' passages')
+      print('finish')
 
 def main():
 
@@ -207,9 +281,13 @@ def main():
   if not os.path.exists(FLAGS.output_folder):
     os.mkdir(FLAGS.output_folder)
 
-
-  convert_corpus(corpus=FLAGS.corpus, tokenizer=tokenizer, doc_type=FLAGS.doc_type)
-  print('Done!')
+  if FLAGS.doc_type!='doc': #passage or query
+    convert_passage_corpus(corpus=FLAGS.corpus, tokenizer=tokenizer, doc_type=FLAGS.doc_type)
+    print('Done!')
+  else:
+    convert_doc_corpus(corpus=FLAGS.corpus, tokenizer=tokenizer, doc_type=FLAGS.doc_type, seg_length=FLAGS.max_seq_length\
+      , max_seg=FLAGS.max_seg)
+    print('Done!')
 
 if __name__ == '__main__':
   main()

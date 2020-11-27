@@ -62,9 +62,11 @@ def convert_to_bert_input(text, max_seq_length, tokenizer, add_cls):
 
   return input_ids
 
-def convert_to_colbert_input(text, max_seq_length, tokenizer, add_cls, filtering, padding_mask=False):
-
-  tokens = tokenizer.tokenize(text)
+def convert_to_colbert_input(text, max_seq_length, tokenizer, add_cls, filtering, padding_mask=False, tokenize=True):
+  if tokenize:
+    tokens = tokenizer.tokenize(text)
+  else:
+    tokens = text
 
 
   # Account for [CLS] and [SEP] with "- 2"

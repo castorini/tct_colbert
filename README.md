@@ -3,9 +3,7 @@ Here, we conduct the experiments using Siamese BERT-base model. The maximum quer
 
 Requirement
 ---
-pip install tensorflow-gpu
-pip install faiss-gpu
-pip install progressbar
+tensorflow-gpu, faiss-gpu, progressbar
 
 Passage Re-ranking with TCT-ColBERT embeeding
 ---
@@ -41,8 +39,9 @@ MRR10            | 0.3316
 Recall@1000      | 0.8140
 Latency (s/query)| 0.0070
 
-End to End Passage Retrieval with TCT-ColBERT embeeding. Indexing all MSMARCO passages in a file (Exhuasive search) requires 26 GB. For example, if only 4GB GPU is available for search, you can set max_passage_each_index to 1000,000 and 8 indexing files will be generated. Then, we search each index for topk passages, and merge and sort them to get the final ranking result.
+End to End Passage Retrieval with TCT-ColBERT embeeding.
 ---
+Indexing all MSMARCO passages in a file (Exhuasive search) requires 26 GB. For example, if only 4GB GPU is available for search, you can set max_passage_each_index to 1000,000 and 8 indexing files will be generated. Then, we search each index for topk passages, and merge and sort them to get the final ranking result.
 ```shell=bash
 # First Store your query and passage embeddings tf record in embeddings/query_emb and embeddings/corpus_emb respectively.
 mkdir prediction indexes

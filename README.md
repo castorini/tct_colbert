@@ -90,4 +90,34 @@ MRR10            | 0.3345
 Recall@1000      | 0.9637
 Latency (s/query)| 0.1000
 
+Dense and sparse ranking list fusion
+---
+We prepare two rank lists (rank_file0 and rank_file1 for dense and sparse respectively) in advance and use below scripts to fuse their scores and rank. The rank list should be in the format: qid"\t"docid"\t"rank"\t"score
+```shell=bash
+qerl_file=msmarco-passage/qrels.dev.small.tsv
+dense_rank_list=tct_colbert_rank.tsv
+sparse_rank_list=doct5query_rank.tsv
+alpha=0.24 #0.24 for doct5query and 0.1 for default BM25
+###############################################
+python3 ./fuse.py \
+       --rank_file0 $dense_rank_list --rank_file1 $sparse_rank_list \
+       --output_path . \
+       --alpha $alpha --topk 1000
+# Evaluation
+python3 ./convert_msmarco_to_trec_run.py --input_run ./fusion.tsv --output_run ./fusion.trec
+python3 ./msmarco_eval.py $qerl_file ./fusion.tsv
+./trec_eval.9.0.4/trec_eval -c -mrecall.1000 \
+$qerl_file ./fusion.trec
+```
+TCT-ColBERT + Doct5query
+Results  | Dev
+------------| :------:
+MRR10            | 0.3641
+Recall@1000      | 0.9736
+
+TCT-ColBERT + Default BM25
+Results  | Dev
+------------| :------:
+MRR10            | 0.3524
+Recall@1000      | 0.9702
 

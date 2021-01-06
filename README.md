@@ -121,3 +121,24 @@ Results  | Dev
 MRR10            | 0.3524
 Recall@1000      | 0.9702
 
+
+Fetch Pretrained Model
+---
+
+checkpoint:
+```
+wget https://storage.googleapis.com/tct_colbert/msmarco_distill/model/checkpoint
+wget https://storage.googleapis.com/tct_colbert/msmarco_distill/model/model.ckpt-100000.data-00000-of-00001
+wget https://storage.googleapis.com/tct_colbert/msmarco_distill/model/model.ckpt-100000.index
+wget https://storage.googleapis.com/tct_colbert/msmarco_distill/model/model.ckpt-100000.meta
+```
+
+embeddings:
+```
+for ITER in {00..09};do
+	wget https://storage.googleapis.com/tct_colbert/msmarco_distill/corpus_emb/msmarco${ITER}.tf
+done
+
+wget https://storage.googleapis.com/tct_colbert/msmarco_distill/query_emb/queries.dev.small00.tf
+wget https://storage.googleapis.com/tct_colbert/msmarco_distill/query_emb/dl2019.queries.eval00.tf
+```

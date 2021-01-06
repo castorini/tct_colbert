@@ -127,8 +127,8 @@ Fetch Pretrained Model
 1. Get [gsutil](https://cloud.google.com/storage/docs/quickstart-gsutil) tool
 2. Run following cmds:
 ```
-gsutil cp -r https://storage.googleapis.com/tct_colbert/msmarco_distill/model ./
-gsutil cp -r https://storage.googleapis.com/tct_colbert/msmarco_distill/corpus_emb ./
-gsutil cp -r https://storage.googleapis.com/tct_colbert/msmarco_distill/query_emb ./
+gsutil cp -r gs://tct_colbert/msmarco_distill/model ./
+gsutil cp -r gs://tct_colbert/msmarco_distill/corpus_emb ./
+gsutil cp -r gs://tct_colbert/msmarco_distill/query_emb ./
 ```
 

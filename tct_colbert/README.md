@@ -25,7 +25,7 @@ python main.py --use_tpu=True \
                --tpu_address=$tpu_address \
                --do_output=True \
                --init_checkpoint=model.ckpt-160000 \
-               --output_dir=gs://jackir/output \
+               --output_dir=$Your_GS_Folder \
                --embedding_file=msmarco0 \
 
 python main.py --use_tpu=True \

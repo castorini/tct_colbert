@@ -21,8 +21,8 @@ from __future__ import print_function
 import collections
 import unicodedata
 import six
-# import tensorflow as tf
-import tensorflow.compat.v1 as tf
+import tensorflow as tf
+# import tensorflow.compat.v1 as tf
 # import spacy
 # nlp = spacy.load('en', parser = False)
 # from text_process import pre_proc, process
@@ -62,7 +62,7 @@ def convert_to_bert_input(text, max_seq_length, tokenizer, add_cls):
 
   return input_ids
 
-def convert_to_colbert_input(text, max_seq_length, tokenizer, add_cls, filtering, padding_mask=False, tokenize=True):
+def convert_to_colbert_input(text, max_seq_length, tokenizer, add_cls, padding_mask=False, tokenize=True):
   if tokenize:
     tokens = tokenizer.tokenize(text)
   else:
@@ -91,46 +91,45 @@ def convert_to_colbert_input(text, max_seq_length, tokenizer, add_cls, filtering
   # For classification tasks, the first vector (corresponding to [CLS]) is
   # used as as the "sentence vector". Note that this only makes sense because
   # the entire model is fine-tuned.
-  filter_mask=[]
+  # filter_mask=[]
 
-  if filtering:
-    try:
-      t = ' '.join(tokens[3:])
-      t = t.replace(' ##','')
-      nlp_tokens = nlp(pre_proc(t))
-      proc_tokens = process(nlp_tokens)
-      tokens_pos = proc_tokens['pos']
-      tokens_word = proc_tokens['word']
-      counter=-1
-      for token in tokens[3:]:
-        if ('#' not in token):
-          counter+=1
-        if (('NN' in tokens_pos[counter]) or ('JJ' in tokens_pos[counter]) or ('VB' in tokens_pos[counter])):
-          filter_mask.append(1)
-        else:
-          filter_mask.append(0)
-    except:
-      print('debug')
-      import pdb; pdb.set_trace()  # breakpoint 1174f406 //
+  # if filtering:
+  #   try:
+  #     t = ' '.join(tokens[3:])
+  #     t = t.replace(' ##','')
+  #     nlp_tokens = nlp(pre_proc(t))
+  #     proc_tokens = process(nlp_tokens)
+  #     tokens_pos = proc_tokens['pos']
+  #     tokens_word = proc_tokens['word']
+  #     counter=-1
+  #     for token in tokens[3:]:
+  #       if ('#' not in token):
+  #         counter+=1
+  #       if (('NN' in tokens_pos[counter]) or ('JJ' in tokens_pos[counter]) or ('VB' in tokens_pos[counter])):
+  #         filter_mask.append(1)
+  #       else:
+  #         filter_mask.append(0)
+  #   except:
+  #     print('debug')
 
 
-    filter_mask=[0,0,0]+filter_mask
+  #   filter_mask=[0,0,0]+filter_mask
 
 
   if add_cls:
     tokens = ["[CLS]"] + tokens
-    filter_mask=[0]+filter_mask
+    # filter_mask=[0]+filter_mask
   #tokens += ["[SEP]"]
 
   if padding_mask:
     tokens+= ["[MASK]"]*(max_seq_length-len(tokens))
-    filter_mask=filter_mask+[0]*(max_seq_length-len(tokens))
+    # filter_mask=filter_mask+[0]*(max_seq_length-len(tokens))
 
 
   input_ids = tokenizer.convert_tokens_to_ids(tokens)
 
 
-  return input_ids, filter_mask
+  return input_ids
 
 def convert_seqs_to_bert_input(docs, max_seq_length, tokenizer, add_cls, max_sent=5):
   tokens=[]

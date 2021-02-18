@@ -69,17 +69,17 @@ flags.DEFINE_integer(
 def write_to_tf_record(writer, tokenizer, doc_text,
                       docid, doc_type):
   if doc_type=='doc':
-    doc_ids, _ = tokenization.convert_to_colbert_input(
+    doc_ids = tokenization.convert_to_colbert_input(
         text=['[','d',']']+doc_text, max_seq_length=FLAGS.max_seq_length, tokenizer=tokenizer,
-        add_cls=True, filtering=False, padding_mask=False, tokenize=False)
+        add_cls=True, padding_mask=False, tokenize=False)
   elif doc_type=="passage":
-    doc_ids, _ = tokenization.convert_to_colbert_input(
+    doc_ids = tokenization.convert_to_colbert_input(
         text='[D] '+doc_text, max_seq_length=FLAGS.max_seq_length, tokenizer=tokenizer,
-        add_cls=True, filtering=False, padding_mask=False)
+        add_cls=True, padding_mask=False)
   elif doc_type=="query":
-    doc_ids, _ = tokenization.convert_to_colbert_input(
+    doc_ids = tokenization.convert_to_colbert_input(
         text='[Q] '+doc_text, max_seq_length=FLAGS.max_seq_length, tokenizer=tokenizer,
-        add_cls=True, filtering=False, padding_mask=True)
+        add_cls=True, padding_mask=True)
 
   docid=int(docid)
   doc_ids_tf = tf.train.Feature(
@@ -102,8 +102,10 @@ def convert_passage_corpus(corpus, tokenizer, doc_type):
   print('Counting number of documents...')
   num_lines = sum(1 for line in open(FLAGS.corpus_path, 'r'))
   print('{} passages found.'.format(num_lines))
-  remain = num_lines%40
 
+  remain = num_lines%40
+  if doc_type=='query':
+    remain = 0
   print('Converting {} to tfrecord...'.format(FLAGS.corpus_path))
   start_time = time.time()
   docids=[]
@@ -131,6 +133,13 @@ def convert_passage_corpus(corpus, tokenizer, doc_type):
 
   for i, doc in enumerate(docs):
 
+    if (i % (num_lines-remain) == 0) and (i!=0): #8841800
+      writer.close()
+      counter+=1
+      writer = tf.python_io.TFRecordWriter(
+        FLAGS.output_folder + '/'+ corpus + str(counter) +'.tf')
+
+
     write_to_tf_record(writer=writer,
                        tokenizer=tokenizer,
                        doc_text=doc,
@@ -146,11 +155,7 @@ def convert_passage_corpus(corpus, tokenizer, doc_type):
           len(docs) - i) * time_passed / (max(1.0, i) * 3600)
       print('Estimated hours remaining to write the {} corpus: {}'.format(
           corpus, hours_remaining))
-    if (i+1) % (num_lines-remain) == 0: #8841800
-      writer.close()
-      counter+=1
-      writer = tf.python_io.TFRecordWriter(
-        FLAGS.output_folder + '/'+ corpus + str(counter) +'.tf')
+
   writer.close()
   id_writer.close()
 

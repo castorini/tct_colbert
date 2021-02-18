@@ -69,9 +69,9 @@ flags.DEFINE_integer(
 def write_to_tf_record(writer, tokenizer, query, docs, labels,
                        ids_file=None, query_id=None, doc_ids=None, is_train=True):
   query = tokenization.convert_to_unicode(query)
-  query_token_ids, _ = tokenization.convert_to_colbert_input(
+  query_token_ids= tokenization.convert_to_colbert_input(
       text='[Q] '+query, max_seq_length=FLAGS.max_query_length, tokenizer=tokenizer,
-      add_cls=True, filtering=False, padding_mask=True)
+      add_cls=True, padding_mask=True)
 
   query_token_ids_tf = tf.train.Feature(
       int64_list=tf.train.Int64List(value=query_token_ids))
@@ -81,14 +81,12 @@ def write_to_tf_record(writer, tokenizer, query, docs, labels,
   feature = {}
   feature['query_ids']=query_token_ids_tf
   for i, (doc_text, label) in enumerate(zip(docs, labels)):
-    # docs=[]
-    # for doc in nlp(doc_text).sents:
-    #   docs.append(doc)
-    doc_token_ids, filter_mask = tokenization.convert_to_colbert_input(
+
+    doc_token_ids = tokenization.convert_to_colbert_input(
           text='[D] '+doc_text,
           max_seq_length=FLAGS.max_seq_length,
           tokenizer=tokenizer,
-          add_cls=True, filtering=False, padding_mask=False)
+          add_cls=True, padding_mask=False)
 
 
 
@@ -98,17 +96,13 @@ def write_to_tf_record(writer, tokenizer, query, docs, labels,
     labels_tf = tf.train.Feature(
         int64_list=tf.train.Int64List(value=[label]))
 
-    # doc_filter_tf = tf.train.Feature(
-    #     int64_list=tf.train.Int64List(value=filter_mask))
 
 
     if is_train:
       feature['doc_ids'+str(label)]=doc_ids_tf
-      # feature['doc_filter'+str(label)]=doc_filter_tf
+
     else:
       feature['doc_ids']=doc_ids_tf
-      # feature['doc_filter']=doc_filter_tf
-
 
 
     feature['label']=labels_tf

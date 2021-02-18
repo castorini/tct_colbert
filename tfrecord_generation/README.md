@@ -12,7 +12,7 @@ python ./convert_collection_to_tfrecord.py \
   --output_folder=${DATA_DIR}/tfrecord \
   --vocab_file=${MODEL_DIR}/vocab.txt \
   --max_seq_length=154 \ #150 plus 4 tokens '[CLS]', '[', 'D', ']'
-  --corpus_path ${MODEL_DIR}/collection.tsv\
+  --corpus_path ${DATA_DIR}/collection.tsv\
   --doc_type doc\
   --corpus msmarco
 # Convert queries in dev set
@@ -20,7 +20,7 @@ python ./convert_collection_to_tfrecord.py \
   --output_folder=${DATA_DIR}/tfrecord \
   --vocab_file=${MODEL_DIR}/vocab.txt \
   --max_seq_length=36 \ #32 plus 4 tokens '[CLS]', '[', 'Q', ']'
-  --corpus_path ${MODEL_DIR}/queries.dev.small.tsv\
+  --corpus_path ${DATA_DIR}/queries.dev.small.tsv\
   --doc_type query\
   --corpus queries.dev
 ```

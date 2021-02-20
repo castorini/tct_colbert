@@ -29,7 +29,7 @@ flags.DEFINE_string(
     "output_folder", None,
     "output tfrecord file path")
 flags.DEFINE_integer(
-    "max_seq_length", 400,
+    "max_seq_length", 512,
     "The maximum total input sequence length after WordPiece tokenization. "
     "Sequences longer than this will be truncated, and sequences shorter "
     "than this will be padded.")
@@ -60,9 +60,9 @@ flags.DEFINE_integer(
 def write_to_tf_record(writer, tokenizer, query, docs, labels,
                        ids_file=None, query_id=None, doc_ids=None, is_train=True):
   query = tokenization.convert_to_unicode(query)
-  query_token_ids, _ = tokenization.convert_to_colbert_input(
+  query_token_ids = tokenization.convert_to_colbert_input(
       text='[Q] '+query, max_seq_length=FLAGS.max_query_length, tokenizer=tokenizer,
-      add_cls=True, filtering=False, padding_mask=True)
+      add_cls=True, padding_mask=True)
 
   query_token_ids_tf = tf.train.Feature(
       int64_list=tf.train.Int64List(value=query_token_ids))
@@ -73,11 +73,11 @@ def write_to_tf_record(writer, tokenizer, query, docs, labels,
   feature['query_ids']=query_token_ids_tf
   for i, (doc_text, label) in enumerate(zip(docs, labels)):
 
-    doc_token_ids, filter_mask = tokenization.convert_to_colbert_input(
+    doc_token_ids = tokenization.convert_to_colbert_input(
           text='[D] '+doc_text,
           max_seq_length=FLAGS.max_seq_length,
           tokenizer=tokenizer,
-          add_cls=True, filtering=False, padding_mask=False)
+          add_cls=True, padding_mask=False)
 
 
 
@@ -116,35 +116,7 @@ def convert_train_dataset(tokenizer):
   qrels = defaultdict(list)
   with open(FLAGS.qrel, 'r') as f:
     for line in f:
-      qid, _, docid, _ = line.split('\t')
-      qrels[qid].append(docid)
-  print('Read positive candidate file...')
-  pos_qid_docid = defaultdict(list)
-  with open(FLAGS.pos_candidate_file, 'r') as f:
-    for i, line in enumerate(f):
-      qid, docid, rank, _ = line.split('\t')
-      rank = int(rank)
-      if rank <= 200:
-        pos_qid_docid[qid].append(docid)
-      # if i >1000*50:
-      #   break
-
-  # print('Read query sim file...')
-  # qid_sim_qid = defaultdict(list)
-  # with open(FLAGS.query_sim_file, 'r') as f:
-  #   for i, line in enumerate(f):
-  #     qid, sim_qid, rank, _ = line.split('\t')
-  #     rank = int(rank)
-  #     if rank!=1:
-  #       qid_sim_qid[qid].append(sim_qid)
-
-
-
-  print('Read qrels...')
-  qrels = defaultdict(list)
-  with open(FLAGS.qrel, 'r') as f:
-    for line in f:
-      qid, _, docid, _ = line.split('\t')
+      qid, _, docid, _ = line.split(' ')
       qrels[qid].append(docid)
 
   print('Read queries...')
@@ -155,41 +127,32 @@ def convert_train_dataset(tokenizer):
       qid2query[qid] = query.strip()
 
   print('Read candidate file...')
-  qrank = defaultdict(lambda:1000)
-  qid_docid = defaultdict(list)
-  qid_doc_score = defaultdict(list)
   hard_neg_qid_docid = defaultdict(list)
   with open(FLAGS.candidate_file, 'r') as f:
     for i, line in enumerate(f):
+      if i%1000>=200:
+        continue
       qid, docid, rank, score = line.split('\t')
-      rank = int(rank)
-      if rank<=FLAGS.topk:
-        qid_docid[qid].append(docid)
-        qid_doc_score[qid].append(float(score))
-        # if (docid not in pos_qid_docid[qid]) and (rank <= 100):
-        #   hard_neg_qid_docid[qid].append(docid)
-      if docid in qrels[qid]:
-        qrank[qid] = rank
-      # if i >1000*50:
-      #   break
+      hard_neg_qid_docid[qid].append(docid)
 
   print('Collection...')
   docid2doc = {}
   with open(FLAGS.collection, 'r') as f:
     for line in f:
-      docid, doc = line.split('\t')
-      docid2doc[docid] = doc.strip()
+      contents = line.strip().split('\t')
+      docid = contents[0]
+      doc = ' '.join(contents[1:])
+      docid2doc[docid] = doc
 
-
-  num_lines = len(qid_docid.keys())
+  num_lines = len(hard_neg_qid_docid.keys())
   print('{} examples found.'.format(num_lines))
   writer = tf.python_io.TFRecordWriter(
        FLAGS.output_folder + '/dataset_hard_train_tower.tf')
   print('Converting Train to tfrecord...')
   start_time = time.time()
-
+  neg_samples = FLAGS.neg_samples
   for j in range(FLAGS.repetition):
-    for i, qid in enumerate(qid_docid.keys()):
+    for i, qid in enumerate(hard_neg_qid_docid.keys()):
 
 
       if i % 1000 == 0:
@@ -202,10 +165,7 @@ def convert_train_dataset(tokenizer):
 
 
       query = qid2query[qid]
-      neg_samples = FLAGS.neg_samples
-
-      negative_docids = random.sample(qid_docid[qid][:FLAGS.topk] ,neg_samples)
-      # negative_docids = choices(hard_neg_qid_docid[qid]+qid_docid[qid][:FLAGS.topk], qid_doc_score[qid][:FLAGS.topk])
+      negative_docids = random.sample(hard_neg_qid_docid[qid][:FLAGS.topk] ,neg_samples)
 
 
       try:
@@ -213,9 +173,7 @@ def convert_train_dataset(tokenizer):
         positive_docid = random.sample(positive_docids,1)[0]
         positive_doc = docid2doc[positive_docid]
       except:
-        positive_docid = pos_qid_docid[qid][0]
-        positive_doc = docid2doc[positive_docid]
-        # continue
+        continue
 
 
       for k, negative_docid in enumerate(negative_docids):

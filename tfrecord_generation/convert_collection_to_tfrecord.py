@@ -62,7 +62,7 @@ flags.DEFINE_integer(
     "The maximum number of docs per query for dev and eval sets.")
 
 flags.DEFINE_integer(
-    "max_seg", 1,
+    "max_seg", 4,
     "The maximum number of docs per query for dev and eval sets.")
 
 
@@ -160,7 +160,7 @@ def convert_passage_corpus(corpus, tokenizer, doc_type):
   id_writer.close()
 
 
-def convert_doc_corpus(corpus, tokenizer, doc_type, seg_length, max_seg, add_title=True, add_url=False):
+def convert_doc_corpus(corpus, tokenizer, doc_type, seg_length, max_seg):
 
   def aggregate_passages(doc, seg_length):
     passages = []
@@ -187,18 +187,10 @@ def convert_doc_corpus(corpus, tokenizer, doc_type, seg_length, max_seg, add_tit
     with open(FLAGS.corpus_path) as f:
       for doc_num, line in enumerate(f):
 
-        docid, url, title, doc = line.split('\t')
-        doc = doc.strip()
+        content = line.strip().split('\t') #docid, url, title, doc
 
-
-        if doc=='' and title=='':
-          continue
-
-
-        if add_title:
-          doc = title + ' ' + doc
-        if add_url:
-          doc = url + ' ' + doc
+        docid = content[0]
+        doc = ' '.join(content[1:])
 
 
         passages = aggregate_passages(doc, seg_length-4)
@@ -225,7 +217,7 @@ def convert_doc_corpus(corpus, tokenizer, doc_type, seg_length, max_seg, add_tit
 
           num_id+=1
 
-          if (((num_id+1) % 23654360) == 0): #(chunk_len, max_seg): (154X16) 23654360+19 (256X8)
+          if (((num_id+1) % 7651000) == 0): #(chunk_len, max_seg): (154X16) 23654360+19 (256X8)
             print('New')
             writer.close()
             counter+=1
@@ -241,18 +233,9 @@ def convert_doc_corpus(corpus, tokenizer, doc_type, seg_length, max_seg, add_tit
     with open(FLAGS.corpus_path) as f:
       for doc_num, line in enumerate(f):
 
-        docid, url, title, doc = line.split('\t')
-        doc = doc.strip()
-
-
-        if doc=='' and title=='':
-          continue
-
-
-        if add_title:
-          doc = title + ' ' + doc
-        if add_url:
-          doc = url + ' ' + doc
+        content = line.strip().split('\t') #docid, url, title, doc
+        docid = content[0]
+        doc = ' '.join(content[1:])
 
 
         passages = aggregate_passages(doc, seg_length-4)

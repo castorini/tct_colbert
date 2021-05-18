@@ -1,49 +1,98 @@
-# Embedding Search for IR
+# TCT-ColBERT training and embedding output using TPU
+TCT-ColBERT Training
+---
+To train TCT-ColBERT, we first convert triplet.small.train.tsv to dataset_train_tower.tf. If do_eval set True, we also use the trained bi-encoder to rerank the Msmarco dev set (we also convert top1000.dev.tsv to dataset_dev_tower.tf in advance). If using GPU, set use_tpu=False and remove tpu_address option.
+```shell=bash
+python train/main.py --use_tpu=True \
+               --tpu_address=$tpu_address \
+               --do_train=True \ 
+               --do_eval=True \
+               --train_model=teacher \
+               --eval_model=teacher \
+               --num_train_steps=160000 \
+               --bert_pretrained_dir=$Your_GS_Folder/uncased_L-12_H-768_A-12 \
+               --init_checkpoint=$Your_GS_Folder/uncased_L-12_H-768_A-12/bert_model.ckpt \
+               --data_dir=$Your_GS_Folder/msmarco-passage \
+               --train_file=dataset_train_tower.tf \
+               --eval_file=dataset_dev_tower.tf \
+               --output_dir=$Your_GS_Folder/uncased_L-12_H-768_A-12/colbert \
+```
+
+```shell=bash
+python train/main.py --use_tpu=True \
+               --tpu_address=$tpu_address \
+               --do_train=True \
+               --do_eval=True \
+               --train_model=student \
+               --eval_model=student \
+               --num_train_steps=160000 \
+               --bert_pretrained_dir=$Your_GS_Folder/uncased_L-12_H-768_A-12 \
+               --init_checkpoint=$colbert_checkpoint \
+               --data_dir=$Your_GS_Folder/msmarco-passage \
+               --train_file=dataset_train_tower.tf \
+               --eval_file=dataset_dev_tower.tf \
+               --output_dir=$Your_GS_Folder/uncased_L-12_H-768_A-12/tct-colbert \
+```
+TCT-ColBERT Corpus Embedding Output
+---
+To output corpus embedding (with 16 bit), we set default eval_batch_size to 40 and num_tpu_cores to 8. Since the MARCO passage corpus contains 8841823 passages so we split the passages into two tf recrod files, msmarco0.tf (8841800 passages) and msmarco1.tf (23 passages) and then output them saperatley.
+```shell=bash
+#Output Corpus embeddings
+python train/main.py --use_tpu=True \
+               --tpu_address=$tpu_address \
+               --do_output=True \
+               --eval_model=student \
+               --bert_pretrained_dir=$Your_GS_Folder/uncased_L-12_H-768_A-12 \
+               --eval_checkpoint=$tct-colbert_checkpoint \
+               --output_dir=$output_folder \
+               --data_dir=$Your_GS_Folder/msmarco-passage \
+               --embedding_file=msmarco0 \
+
+python train/main.py --use_tpu=True \
+               --tpu_address=$tpu_address \
+               --do_output=True \
+               --eval_model=student \
+               --bert_pretrained_dir=$Your_GS_Folder/uncased_L-12_H-768_A-12 \
+               --eval_checkpoint=$tct-colbert_checkpoint \
+               --output_dir=$output_folder \
+               --data_dir=$Your_GS_Folder/msmarco-passage \
+               --embedding_file=msmarco1 \
+               --num_tpu_cores=1 \
+               --eval_batch_size=1 \ 
+```
+TCT-ColBERT Query Embedding Output
+---
+```shell=bash
+# Output Query embeddings
+for file in queries.dev.small0 dl2019.queries.eval0
+do
+    python main.py --use_tpu=True \
+               --tpu_address=$tpu_address \
+               --do_output=True \
+               --eval_model=student \
+               --bert_pretrained_dir=$Your_GS_Folder/uncased_L-12_H-768_A-12 \
+               --eval_checkpoint=$tct-colbert_checkpoint \
+               --output_dir=$output_folder \
+               --data_dir=$Your_GS_Folder/msmarco-passage \
+               --embedding_file=$file \
+               --num_tpu_cores=1 \
+               --eval_batch_size=20 \
+               --doc_type=0 \ # default doc_type 1: Passage; doc_type 0: Query
+done
+```
+
+TCT-ColBERT Dense Retrieval
+---
 Here, we conduct the experiments using Siamese BERT-base model. The maximum query and passage lengths are set to 32 and 150 (not including special tokens) respectively. For each query (document), we also put \[CLS\] and \[Q\](\[D\]) in the beginning. For the queries no longer than length of 32, we pad them with \[MASK\] tokens. Here, we use average pooling embedding with dimension 768 (with 32 bits) to represent each query and passage.
 
 Requirement
 ---
 tensorflow-gpu, faiss-gpu, progressbar
 
-Passage Re-ranking with TCT-ColBERT embeeding
----
-For re-ranking, we currently use CPU for dot product computation. First Store your query and passage embeddings tf record in the folders query_emb and corpus_emb respectively, and put re-ranking candidiate qrel and id_to_query files in the current folder.
-```shell=bash
-mkdir prediction
-candidate_file=top1000.dev.tsv
-qerl_file=qrels.dev.small.tsv
-topk=1000
-data_type=32 # 16 or 32 bits for embedding storage
-query_emb=./query_emb/queries.doc.dev00.tf
-corpus_emb=./corpus_emb/msmarco0
-id_to_query=./queries.dev.small.id
-result_file=./prediction/rerank_result
-###############################################
-result_file=./prediction/rerank_result
-python3 rerank.py --candidate_file $candidate_file \
-                 --topk $topk --data_type $data_type \
-                 --query_emb_path $query_emb --corpus_emb_path $corpus_emb \
-                 --id_to_query_path $id_to_query \
-                 --result_file $result_file.tsv
-# Evaluation
-python3 ./convert_msmarco_to_trec_run.py --input_run $result_file.tsv --output_run $result_file.trec
-python3 ./msmarco_eval.py \
- msmarco-passage/qrels.dev.small.tsv $result_file.tsv
-./trec_eval.9.0.4/trec_eval -c -mrecall.1000 \
- $qerl_file $result_file.trec
-```
-We do not consider the time for query embedding generation (7ms/query) into latency computation here.
-Results  | Dev
-------------| :------:
-MRR10            | 0.3316
-Recall@1000      | 0.8140
-Latency (s/query)| 0.0070
 
-End to End Passage Retrieval with TCT-ColBERT embeeding.
----
 Indexing all MSMARCO passages in a file (Exhuasive search) requires 26 GB. For example, if only 4GB GPU is available for search, you can set max_passage_each_index to 1000,000 and 8 indexing files will be generated. Then, we search each index for topk passages, and merge and sort them to get the final ranking result. Here, we use average pooling embedding with dimension 768 (with 32 bits) to represent each query and passage. Similar to re-ranking, first store your query and passage embeddings tf record in the folders query_emb and corpus_emb respectively, and put qrel and id_to_query files in the current folder.
 ```shell=bash
-mkdir prediction indexes
+
 qerl_file=msmarco-passage/qrels.dev.small.tsv
 topk=1000
 num_files=10 # We currently save 1000,000 passage embeddings in each tf record file; thus total file number for corpus is 10.
@@ -58,29 +107,30 @@ corpus_emb=./corpus_emb/msmarco0
 id_to_query=./queries.dev.small.id
 first_stage_path=first_stage_result
 result_file=./prediction/rank_result
+mkdir prediction indexes $first_stage_path
 ###############################################
-# indexing (quantize option is on going)
-python3 index.py --num_files $num_files --index_file $index_file \
+# indexing
+python3 ./dr/index.py --num_files $num_files --index_file $index_file \
      --topk $topk --corpus_emb_path $corpus_emb --data_type $data_type \
      --corpus_type $corpus_type --max_passage_each_index $max_passage_each_index \
 # First-stage search with faiss
 for i in {0..$num_index}
 do
-    python search.py --offset $i --index_file $index_file\_$i --pickle_file $first_stage_path/result\_$i.pickle\
+    python ./dr/search.py --offset $i --index_file $index_file\_$i --pickle_file $first_stage_path/result\_$i.pickle\
         --topk $topk --query_emb_path $query_emb --data_type 32\
-        --query_word_num $query_word_num --doc_word_num $doc_word_num --emb_dim $emb_dim --batch_size 1 --use_gpu \
+        --query_word_num $query_word_num --emb_dim $emb_dim --batch_size 1 --use_gpu \
         --gpu_device $gpu_device --passage_per_index $max_passage_each_index
 done
 # Output final result
-python3 output_result.py --topk $topk --emb_path $emb_path --data_type $data_type --first_stage_path $first_stage_path\
+python3 ./dr/output_result.py --topk $topk --emb_path $emb_path --data_type $data_type --first_stage_path $first_stage_path\
                          --result_file $result_file.tsv \
                          --corpus_type $corpus_type \
                          --id_to_query_path $id_to_query \
 
 # Evaluation
-python3 ./convert_msmarco_to_trec_run.py --input_run $result_file.tsv --output_run $result_file.trec
-python3 ./msmarco_eval.py \
- msmarco-passage/qrels.dev.small.tsv $result_file.tsv
+python3 ./eval/convert_msmarco_to_trec_run.py --input_run $result_file.tsv --output_run $result_file.trec
+python3 ./eval/msmarco_eval.py \
+ $qerl_file $result_file.tsv
 ./trec_eval.9.0.4/trec_eval -c -mrecall.1000 \
  $qerl_file $result_file.trec
 ```
@@ -90,36 +140,7 @@ MRR10            | 0.3345
 Recall@1000      | 0.9637
 Latency (s/query)| 0.1000
 
-Dense and sparse ranking list fusion
----
-We prepare two rank lists (rank_file0 and rank_file1 for dense and sparse respectively) in advance and use below scripts to fuse their scores and rank. The rank list should be in the format: qid"\t"docid"\t"rank"\t"score
-```shell=bash
-qerl_file=msmarco-passage/qrels.dev.small.tsv
-dense_rank_list=tct_colbert_rank.tsv
-sparse_rank_list=doct5query_rank.tsv
-alpha=0.24 #0.24 for doct5query and 0.1 for default BM25
-###############################################
-python3 ./fuse.py \
-       --rank_file0 $dense_rank_list --rank_file1 $sparse_rank_list \
-       --output_path . \
-       --alpha $alpha --topk 1000
-# Evaluation
-python3 ./convert_msmarco_to_trec_run.py --input_run ./fusion.tsv --output_run ./fusion.trec
-python3 ./msmarco_eval.py $qerl_file ./fusion.tsv
-./trec_eval.9.0.4/trec_eval -c -mrecall.1000 \
-$qerl_file ./fusion.trec
-```
-TCT-ColBERT + Doct5query
-Results  | Dev
-------------| :------:
-MRR10            | 0.3641
-Recall@1000      | 0.9736
 
-TCT-ColBERT + Default BM25
-Results  | Dev
-------------| :------:
-MRR10            | 0.3524
-Recall@1000      | 0.9702
 
 
 Fetch Pretrained Model

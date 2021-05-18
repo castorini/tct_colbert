@@ -66,7 +66,7 @@ TCT-ColBERT Query Embedding Output
 # Output Query embeddings
 for file in queries.dev.small0 dl2019.queries.eval0
 do
-    python main.py --use_tpu=True \
+    python train/main.py --use_tpu=True \
                --tpu_address=$tpu_address \
                --do_output=True \
                --eval_model=student \

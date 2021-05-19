@@ -17,13 +17,14 @@ unzip uncased_L-24_H-1024_A-16.zip
 ```
 
 ## Convert Msmarco Train and dev set to Tfrecord
+Here we set max passage length 150 plus 4 tokens '[CLS]', '[', 'D', ']', and max query length 32 plus 4 tokens '[CLS]', '[', 'Q', ']'.
 ```shell=bash
 DATA_DIR=./msmarco-passage
 MODEL_DIR=./uncased_L-12_H-768_A-12
 mkdir ${DATA_DIR}/tfrecord
 # Generate training data
 python ./tfrecord_generation/convert_msmarco_to_tfrecord_tower.py \
-  --output_folder=${OUTPUT_DIR}/tfrecord \
+  --output_folder=${DATA_DIR}/tfrecord \
   --vocab_file=${MODEL_DIR}/vocab.txt \
   --max_query_length=36\
   --max_seq_length=154 \
@@ -95,16 +96,16 @@ mkdir ${DATA_DIR}/tfrecord
 python ./tfrecord_generation/convert_collection_to_tfrecord.py \
   --output_folder=${DATA_DIR}/tfrecord \
   --vocab_file=${MODEL_DIR}/vocab.txt \
-  --max_seq_length=154 \ #150 plus 4 tokens '[CLS]', '[', 'D', ']'
-  --corpus_path=${DATA_DIR}/collection.tsv\
-  --doc_type=passage\
+  --max_seq_length=154 \
+  --corpus_path=${DATA_DIR}/collection.tsv \
+  --doc_type=passage \
   --corpus=msmarco
 # Convert queries in dev set
 python ./tfrecord_generation/convert_collection_to_tfrecord.py \
   --output_folder=${DATA_DIR}/tfrecord \
   --vocab_file=${MODEL_DIR}/vocab.txt \
-  --max_seq_length=36 \ #32 plus 4 tokens '[CLS]', '[', 'Q', ']'
-  --corpus_path=${DATA_DIR}/queries.dev.small.tsv\
+  --max_seq_length=36 \
+  --corpus_path=${DATA_DIR}/queries.dev.small.tsv \
   --doc_type=query \
   --corpus=queries.dev.small
 ```
@@ -149,9 +150,9 @@ python train/main.py --use_tpu=True \
           --eval_batch_size=20 \
           --doc_type=0 \ # default doc_type 1: Passage; doc_type 0: Query
 ```
-With the output embeddings, you can conduct dense retrieval using your own ANN search implementation, Pyserini or our provided reference code.
+With the output embeddings, you can conduct dense retrieval using your own ANN search implementation, [Pyserini](https://github.com/castorini/pyserini/blob/master/docs/experiments-tct_colbert.md) or our provided reference code.
 
-## TCT-ColBERT Dense Retrieval
+## Faiss Brute-force search with TCT-ColBERT Embeddings
 
 ### Requirement
 tensorflow-gpu, faiss-gpu, progressbar
@@ -200,8 +201,10 @@ python3 ./eval/msmarco_eval.py \
 ./trec_eval.9.0.4/trec_eval -c -mrecall.1000 \
  $qerl_file $result_file.trec
 ```
-
-
+The TCT-ColBERT retrieval result:
+Retrieval  | Dev
+------------| :------:
+MRR10            | 0.335
 
 
 

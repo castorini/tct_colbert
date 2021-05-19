@@ -21,7 +21,7 @@ from __future__ import print_function
 import collections
 import unicodedata
 import six
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 # import tensorflow.compat.v1 as tf
 # import spacy
 # nlp = spacy.load('en', parser = False)

@@ -58,7 +58,7 @@ python train/main.py --use_tpu=True \
                --output_dir=$Your_GS_Folder/uncased_L-12_H-768_A-12/colbert \
 ```
 The ColBERT re-ranking result:
-Results  | Dev
+Reranking  | Dev
 ------------| :------:
 MRR10            | 0.350
 
@@ -79,7 +79,7 @@ python train/main.py --use_tpu=True \
                --output_dir=$Your_GS_Folder/uncased_L-12_H-768_A-12/tct-colbert \
 ```
 The TCT-ColBERT re-ranking result:
-Results  | Dev
+Reranking  | Dev
 ------------| :------:
 MRR10            | 0.332
 
@@ -152,12 +152,9 @@ python train/main.py --use_tpu=True \
 With the output embeddings, you can conduct dense retrieval using your own ANN search implementation, Pyserini or our provided reference code.
 
 ## TCT-ColBERT Dense Retrieval
-Here, we conduct the experiments using Siamese BERT-base model. The maximum query and passage lengths are set to 32 and 150 (not including special tokens) respectively. For each query (document), we also put \[CLS\] and \[Q\](\[D\]) in the beginning. For the queries no longer than length of 32, we pad them with \[MASK\] tokens. Here, we use average pooling embedding with dimension 768 (with 32 bits) to represent each query and passage.
 
-Requirement
----
+### Requirement
 tensorflow-gpu, faiss-gpu, progressbar
-
 
 Indexing all MSMARCO passages in a file (Exhuasive search) requires 26 GB. For example, if only 4GB GPU is available for search, you can set max_passage_each_index to 1000,000 and 8 indexing files will be generated. Then, we search each index for topk passages, and merge and sort them to get the final ranking result. Here, we use average pooling embedding with dimension 768 (with 32 bits) to represent each query and passage. Similar to re-ranking, first store your query and passage embeddings tf record in the folders query_emb and corpus_emb respectively, and put qrel and id_to_query files in the current folder.
 ```shell=bash

@@ -1,7 +1,45 @@
-# TCT-ColBERT training and embedding output using TPU
-TCT-ColBERT Training
----
-To train TCT-ColBERT, we first convert triplet.small.train.tsv to dataset_train_tower.tf. If do_eval set True, we also use the trained bi-encoder to rerank the Msmarco dev set (we also convert top1000.dev.tsv to dataset_dev_tower.tf in advance). If using GPU, set use_tpu=False and remove tpu_address option.
+# Dense Retrieval with TCT-ColBERT
+**\*\*\*\*\* Most of the code in this repository was revised from [Passage Re-ranking with BERT repository](https://github.com/nyu-dl/dl4marco-bert).**\*\*\*\*\* 
+##MS Marco Dataset
+```shell=bash
+DATA_DIR=./msmarco-passage
+mkdir ${DATA_DIR}
+wget https://msmarco.blob.core.windows.net/msmarcoranking/collection.tar.gz -P ${DATA_DIR}
+wget https://msmarco.blob.core.windows.net/msmarcoranking/triples.train.small.tar.gz -P ${DATA_DIR}
+wget https://msmarco.blob.core.windows.net/msmarcoranking/top1000.dev.tar.gz -P ${DATA_DIR}
+wget https://msmarco.blob.core.windows.net/msmarcoranking/qrels.dev.small.tsv -P ${DATA_DIR}
+wget https://storage.googleapis.com/bert_models/2018_10_18/uncased_L-12_H-768_A-12.zip
+tar -xvf ${DATA_DIR}/collection.tar.gz -C ${DATA_DIR}
+tar -xvf ${DATA_DIR}/triples.train.small.tar.gz -C ${DATA_DIR}
+tar -xvf ${DATA_DIR}/top1000.dev.tar.gz -C ${DATA_DIR}
+unzip uncased_L-24_H-1024_A-16.zip
+```
+
+##Convert Msmarco Train and dev set to Tfrecord
+```shell=bash
+DATA_DIR=./msmarco-passage
+MODEL_DIR=./uncased_L-12_H-768_A-12
+mkdir ${DATA_DIR}/tfrecord
+# Generate training data
+python ./tfrecord_generation/convert_msmarco_to_tfrecord_tower.py \
+  --output_folder=${OUTPUT_DIR}/tfrecord \
+  --vocab_file=${MODEL_DIR}/vocab.txt \
+  --max_query_length=36\
+  --max_seq_length=154 \
+  --num_eval_docs=1000 \
+  --train_dataset_path=msmarco-passage/triples.train.small.tsv \
+# Generate dev set for re-ranking
+python ./tfrecord_generation/convert_msmarco_to_tfrecord_tower.py \
+  --output_folder=${DATA_DIR}/tfrecord \
+  --vocab_file=${MODEL_DIR}/vocab.txt \
+  --max_query_length=36\
+  --max_seq_length=154 \
+  --num_eval_docs=1000 \
+  --dev_qrels_path=${DATA_DIR}/qrels.dev.small.tsv \
+  --dev_dataset_path=${DATA_DIR}/top1000.dev.tsv \
+```
+##TCT-ColBERT Training
+To train TCT-ColBERT, first store dataset_train_tower.tf and dataset_dev_tower.tf in $Your_GS_Folder/msmarco-passage. Then, we can start to train our teacher model ColBERT! If do_eval set True, we also use the trained bi-encoder to rerank the Msmarco dev set. If using GPU, set use_tpu=False and remove tpu_address option.
 ```shell=bash
 python train/main.py --use_tpu=True \
                --tpu_address=$tpu_address \
@@ -12,12 +50,16 @@ python train/main.py --use_tpu=True \
                --num_train_steps=160000 \
                --bert_pretrained_dir=$Your_GS_Folder/uncased_L-12_H-768_A-12 \
                --init_checkpoint=$Your_GS_Folder/uncased_L-12_H-768_A-12/bert_model.ckpt \
-               --data_dir=$Your_GS_Folder/msmarco-passage \
+               --data_dir=$Your_GS_Folder/msmarco-passage/tfrecord \
                --train_file=dataset_train_tower.tf \
                --eval_file=dataset_dev_tower.tf \
                --output_dir=$Your_GS_Folder/uncased_L-12_H-768_A-12/colbert \
 ```
-
+The ColBERT re-ranking result:
+Results  | Dev
+------------| :------:
+MRR10            | 0.350
+After training ColBERT, we then set $colbert_checkpoint to the ColBERT checkpoint and start training TCT-ColBERT.
 ```shell=bash
 python train/main.py --use_tpu=True \
                --tpu_address=$tpu_address \
@@ -28,13 +70,41 @@ python train/main.py --use_tpu=True \
                --num_train_steps=160000 \
                --bert_pretrained_dir=$Your_GS_Folder/uncased_L-12_H-768_A-12 \
                --init_checkpoint=$colbert_checkpoint \
-               --data_dir=$Your_GS_Folder/msmarco-passage \
+               --data_dir=$Your_GS_Folder/msmarco-passage/tfrecord \
                --train_file=dataset_train_tower.tf \
                --eval_file=dataset_dev_tower.tf \
                --output_dir=$Your_GS_Folder/uncased_L-12_H-768_A-12/tct-colbert \
 ```
-TCT-ColBERT Corpus Embedding Output
----
+The TCT-ColBERT re-ranking result:
+Results  | Dev
+------------| :------:
+MRR10            | 0.332
+##TCT-ColBERT Embedding Output
+###Msmarco Collection and Dev Queries Tfrecord Conversion
+We first transform Msmarco collection and dev queries to terecord
+```shell=bash
+DATA_DIR=./msmarco-passage
+MODEL_DIR=./uncased_L-12_H-768_A-12
+mkdir ${DATA_DIR}/tfrecord
+# Convert passages in the collection
+python ./tfrecord_generation/convert_collection_to_tfrecord.py \
+  --output_folder=${DATA_DIR}/tfrecord \
+  --vocab_file=${MODEL_DIR}/vocab.txt \
+  --max_seq_length=154 \ #150 plus 4 tokens '[CLS]', '[', 'D', ']'
+  --corpus_path=${DATA_DIR}/collection.tsv\
+  --doc_type=passage\
+  --corpus=msmarco
+# Convert queries in dev set
+python ./tfrecord_generation/convert_collection_to_tfrecord.py \
+  --output_folder=${DATA_DIR}/tfrecord \
+  --vocab_file=${MODEL_DIR}/vocab.txt \
+  --max_seq_length=36 \ #32 plus 4 tokens '[CLS]', '[', 'Q', ']'
+  --corpus_path=${DATA_DIR}/queries.dev.small.tsv\
+  --doc_type=query \
+  --corpus=queries.dev.small
+```
+
+###TCT-ColBERT Corpus and Query Embedding Output
 To output corpus embedding (with 16 bit), we set default eval_batch_size to 40 and num_tpu_cores to 8. Since the MARCO passage corpus contains 8841823 passages so we split the passages into two tf recrod files, msmarco0.tf (8841800 passages) and msmarco1.tf (23 passages) and then output them saperatley.
 ```shell=bash
 #Output Corpus embeddings
@@ -45,7 +115,7 @@ python train/main.py --use_tpu=True \
                --bert_pretrained_dir=$Your_GS_Folder/uncased_L-12_H-768_A-12 \
                --eval_checkpoint=$tct-colbert_checkpoint \
                --output_dir=$output_folder \
-               --data_dir=$Your_GS_Folder/msmarco-passage \
+               --data_dir=$Your_GS_Folder/msmarco-passage/tfrecord \
                --embedding_file=msmarco0 \
 
 python train/main.py --use_tpu=True \
@@ -55,34 +125,27 @@ python train/main.py --use_tpu=True \
                --bert_pretrained_dir=$Your_GS_Folder/uncased_L-12_H-768_A-12 \
                --eval_checkpoint=$tct-colbert_checkpoint \
                --output_dir=$output_folder \
-               --data_dir=$Your_GS_Folder/msmarco-passage \
+               --data_dir=$Your_GS_Folder/msmarco-passage/tfrecord \
                --embedding_file=msmarco1 \
                --num_tpu_cores=1 \
                --eval_batch_size=1 \ 
-```
-TCT-ColBERT Query Embedding Output
----
-```shell=bash
-# Output Query embeddings
-for file in queries.dev.small0 dl2019.queries.eval0
-do
-    python train/main.py --use_tpu=True \
-               --tpu_address=$tpu_address \
-               --do_output=True \
-               --eval_model=student \
-               --bert_pretrained_dir=$Your_GS_Folder/uncased_L-12_H-768_A-12 \
-               --eval_checkpoint=$tct-colbert_checkpoint \
-               --output_dir=$output_folder \
-               --data_dir=$Your_GS_Folder/msmarco-passage \
-               --embedding_file=$file \
-               --num_tpu_cores=1 \
-               --eval_batch_size=20 \
-               --doc_type=0 \ # default doc_type 1: Passage; doc_type 0: Query
-done
-```
 
-TCT-ColBERT Dense Retrieval
----
+# Output Query embeddings
+python train/main.py --use_tpu=True \
+          --tpu_address=$tpu_address \
+          --do_output=True \
+          --eval_model=student \
+          --bert_pretrained_dir=$Your_GS_Folder/uncased_L-12_H-768_A-12 \
+          --eval_checkpoint=$tct-colbert_checkpoint \
+          --output_dir=$output_folder \
+          --data_dir=$Your_GS_Folder/msmarco-passage \
+          --embedding_file=queries.dev.small0 \
+          --num_tpu_cores=1 \
+          --eval_batch_size=20 \
+          --doc_type=0 \ # default doc_type 1: Passage; doc_type 0: Query
+```
+With the output embeddings, you can conduct dense retrieval using your own ANN search implementation, Pyserini or our provided reference code.
+##TCT-ColBERT Dense Retrieval
 Here, we conduct the experiments using Siamese BERT-base model. The maximum query and passage lengths are set to 32 and 150 (not including special tokens) respectively. For each query (document), we also put \[CLS\] and \[Q\](\[D\]) in the beginning. For the queries no longer than length of 32, we pad them with \[MASK\] tokens. Here, we use average pooling embedding with dimension 768 (with 32 bits) to represent each query and passage.
 
 Requirement
@@ -134,11 +197,7 @@ python3 ./eval/msmarco_eval.py \
 ./trec_eval.9.0.4/trec_eval -c -mrecall.1000 \
  $qerl_file $result_file.trec
 ```
-Results  | Dev
-------------| :------:
-MRR10            | 0.3345
-Recall@1000      | 0.9637
-Latency (s/query)| 0.1000
+
 
 
 

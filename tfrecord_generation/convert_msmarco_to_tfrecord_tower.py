@@ -228,42 +228,6 @@ def convert_train_dataset(tokenizer):
   writer.close()
 
 
-  # start_time = time.time()
-
-  # print('Counting number of examples...')
-  # num_lines = sum(1 for line in open(FLAGS.train_dataset_path, 'r'))
-  # print('{} examples found.'.format(num_lines))
-  # writer = tf.python_io.TFRecordWriter(
-  #     FLAGS.output_folder + '/dataset_train.tf')
-
-  # with open(FLAGS.train_dataset_path, 'r') as f:
-  #   for i, line in enumerate(f):
-  #     if i % 1000 == 0:
-  #       time_passed = int(time.time() - start_time)
-  #       print('Processed training set, line {} of {} in {} sec'.format(
-  #           i, num_lines, time_passed))
-  #       hours_remaining = (num_lines - i) * time_passed / (max(1.0, i) * 3600)
-  #       print('Estimated hours remaining to write the training set: {}'.format(
-  #           hours_remaining))
-  #     try:
-  #       sample_id, rel, query, doc= line.rstrip().split('\t')
-  #     except:
-  #       continue
-
-
-  #     if rel=='pos':
-  #       positive_doc = doc
-  #     elif rel=='neg':
-  #       negative_doc = doc
-  #       write_to_tf_record(writer=writer,
-  #                          tokenizer=tokenizer,
-  #                          query=query,
-  #                          docs=[positive_doc, negative_doc],
-  #                          labels=[1, 0])
-  #     # if i>=1000:
-  #     #   break
-
-  # writer.close()
 
 def main():
 

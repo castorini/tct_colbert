@@ -46,7 +46,7 @@ To train TCT-ColBERT, first store dataset_train_tower.tf and dataset_dev_tower.t
 ```shell=bash
 python train/main.py --use_tpu=True \
                --tpu_address=$tpu_address \
-               --do_train=True \ 
+               --do_train=True \
                --do_eval=True \
                --train_model=teacher \
                --eval_model=teacher \

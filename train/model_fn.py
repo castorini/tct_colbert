@@ -124,10 +124,10 @@ def create_model(bert_config, is_training, is_eval, is_output, input_ids, input_
 		score = 0
 		batch_size = query_pooling_emb.shape[0].value
 		if is_training:
-			temperature = 4
+			temperature = 0.25
 			kl = tf.keras.losses.KLDivergence()
 			tct_teacher_loss, tct_teacher_logits, tct_teacher_margins = batch_max_sim_softmax_loss(query_emb, doc0_emb, doc1_emb, 4*batch_size)
-			tct_teacher_logits = tf.nn.softmax(tct_teacher_logits*temperature, axis=-1)
+			tct_teacher_logits = tf.nn.softmax(tct_teacher_logits/temperature, axis=-1)
 			tct_student_loss, tct_student_logits, tct_student_margins = batch_max_sim_softmax_loss(query_pooling_emb, doc0_pooling_emb, doc1_pooling_emb, 4*batch_size) #
 			tct_student_logits = tf.nn.softmax(tct_student_logits, axis=-1)
 
@@ -151,7 +151,7 @@ def create_model(bert_config, is_training, is_eval, is_output, input_ids, input_
 			if train_model =='teacher':
 				loss = tf.reduce_mean(tct_teacher_loss)
 			elif train_model =='student':
-				loss = tf.reduce_mean(teacher_student_kl_loss)
+				loss = tf.reduce_mean(tct_teacher_student_kl_loss)
 				# if loss=='mse':
 				# 	if kd_source=='colbert':
 				# 		loss = tf.reduce_mean(tct_teacher_student_mse_loss)

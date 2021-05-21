@@ -50,7 +50,11 @@ def write_result(qidxs, Index, Score, file, idx_to_qid, idx_to_docid, topk=None,
 						docid = docidx
 					fout.write('{}\t{}\t{}\t{}\n'.format(qid, docid, rank + 1, scores[rank]))
 			else:
-				hit=min(topk, len(Index[i]))
+				try:
+					hit=min(topk, len(Index[i]))
+				except:
+					print('debug')
+
 				docidxs=Index[i]
 				scores=Score[i]
 				for rank, docidx in enumerate(docidxs[:hit]):
@@ -59,7 +63,60 @@ def write_result(qidxs, Index, Score, file, idx_to_qid, idx_to_docid, topk=None,
 					except:
 						docid = docidx
 					fout.write('{}\t{}\t{}\t{}\n'.format(qid, docid, rank + 1, scores[rank]))
+def load_term_weight_tfrecords(srcfiles, dim, data_type='16', index=False, batch=1):
+	def _parse_function(example_proto):
+		features = {'term_weight': tf.FixedLenFeature([],tf.string) , #tf.FixedLenSequenceFeature([],tf.string, allow_missing=True),
+					'docid': tf.FixedLenFeature([],tf.int64)}
+		parsed_features = tf.parse_single_example(example_proto, features)
+		if data_type=='16':
+			corpus = tf.decode_raw(parsed_features['term_weight'], tf.float16)
+		elif data_type=='32':
+			corpus = tf.decode_raw(parsed_features['term_weight'], tf.float32)
+		docid = tf.cast(parsed_features['docid'], tf.int32)
+		return corpus, docid
+	print('Read embeddings...')
+	# widgets = ['Progress: ',Percentage(), ' ', Bar('#'),' ', Timer(),
+	# 	' ', ETA(), ' ', FileTransferSpeed()]
+	# pbar = ProgressBar(widgets=widgets, maxval=10*data_num*len(srcfiles)).start()
+	with tf.Session() as sess:
+		docids=[]
+		term_weights=[]
+		#assign memory in advance so that we can save memory without concatenate
 
+		# if (data_type=='16'): # Faiss now only support index array with float32
+		# 	corpus_embs = np.zeros((word_num*data_num*len(srcfiles) , dim), dtype=np.float16)
+		# elif data_type=='32':
+		# 	corpus_embs = np.zeros((word_num*data_num*len(srcfiles) , dim), dtype=np.float32)
+		# else:
+		# 	raise Exception('Please assign datatype 16 or 32 bits')
+		counter = 0
+		i = 0
+		for srcfile in srcfiles:
+			try:
+				dataset = tf.data.TFRecordDataset(srcfile) # load tfrecord file
+			except:
+				print('Cannot find data')
+				continue
+			dataset = dataset.map(_parse_function) # parse data into tensor
+			dataset = dataset.repeat(1)
+			dataset = dataset.batch(batch)
+			iterator = dataset.make_one_shot_iterator()
+			next_data = iterator.get_next()
+
+			while True:
+				try:
+					corpus_emb, docid = sess.run(next_data)
+					corpus_emb = corpus_emb.reshape(-1, dim)
+					sent_num = corpus_emb.shape[0]
+					docids.append(docid)
+					term_weights.append(corpus_emb)
+					counter+=sent_num
+					# pbar.update(10 * i + 1)
+					# i+=sent_num
+
+				except tf.errors.OutOfRangeError:
+					break
+	return term_weights, docids
 
 def load_tfrecords(srcfiles, data_num, word_num, dim, data_type='16', index=False, batch=1000):
 	def _parse_function(example_proto):
@@ -79,12 +136,13 @@ def load_tfrecords(srcfiles, data_num, word_num, dim, data_type='16', index=Fals
 	with tf.Session() as sess:
 		docids=[]
 		#assign memory in advance so that we can save memory without concatenate
-		if (data_type=='16') and not index: # Faiss now only support index array with float32
+
+		if (data_type=='16'): # Faiss now only support index array with float32
 			corpus_embs = np.zeros((word_num*data_num*len(srcfiles) , dim), dtype=np.float16)
 		elif data_type=='32':
 			corpus_embs = np.zeros((word_num*data_num*len(srcfiles) , dim), dtype=np.float32)
-		else:
-			raise Exception('Please assign datatype 16 or 32 bits')
+		# else:
+		# 	raise Exception('Please assign datatype 16 or 32 bits')
 		counter = 0
 		i = 0
 		for srcfile in srcfiles:
@@ -133,15 +191,16 @@ def load_tfrecords_doc(srcfiles, data_num, word_num, id_to_doc, new_id_to_doc_pa
 	pbar = ProgressBar(widgets=widgets, maxval=10*data_num*len(srcfiles)).start()
 	with tf.Session() as sess:
 		docids=[]
-		if data_type=='16' and not index:
+		if data_type=='16':
 			corpus_embs = np.zeros((word_num*data_num*len(srcfiles) , dim), dtype=np.float16) #assign memory in advance so that we can save memory without concatenate
-		elif data_type=='32':
-			corpus_embs = np.zeros((word_num*data_num*len(srcfiles) , dim), dtype=np.float32)
 		else:
-			raise Exception('Please assign datatype 16 or 32 bits')
+			corpus_embs = np.zeros((word_num*data_num*len(srcfiles) , dim), dtype=np.float32)
+		# else:
+		# 	raise Exception('Please assign datatype 16 or 32 bits')
 		fout = open(new_id_to_doc_path, 'w')
 		counter = 0
 		i = 0
+		p_num = 1
 		for srcfile in srcfiles:
 			try:
 				dataset = tf.data.TFRecordDataset(srcfile) # load tfrecord file
@@ -158,7 +217,7 @@ def load_tfrecords_doc(srcfiles, data_num, word_num, id_to_doc, new_id_to_doc_pa
 			corpus_emb, docid = sess.run(next_data)
 			doc_emb = corpus_emb.reshape(-1, dim)
 			doc_string_id = id_to_doc[docid[0]]
-			p_num = 1
+
 			while True:
 				try:
 					corpus_emb, docid = sess.run(next_data)
@@ -188,6 +247,8 @@ def load_tfrecords_doc(srcfiles, data_num, word_num, id_to_doc, new_id_to_doc_pa
 					docids.append(docid)
 					pbar.update(10 * i + 1)
 					i+=1
+					# if counter==419752:
+					# 	print('debug')
 
 				except tf.errors.OutOfRangeError:
 					break

@@ -397,7 +397,7 @@ def main(_):
 			example = tf.train.Example(features=features)
 			writer.write(example.SerializeToString())
 
-			counter+=1
+			# counter+=1
 			if (counter%100000==0):
 				tf.logging.warn("Read {} examples in {} secs.".format(
 					counter+Save_SAMPLE_NUM*counter1, int(time.time() - start_time)))
@@ -407,7 +407,7 @@ def main(_):
 				counter=0
 				counter1+=1
 				writer = tf.python_io.TFRecordWriter(
-					OUTPUT_DIR + "/" + EMBEDDING_FILE + str(counter1) +".tf")
+					OUTPUT_DIR + "/" + EMBEDDING_FILE + ".tf")
 				tf.logging.warn("Output next {} examples".format(
 					Save_SAMPLE_NUM))
 		writer.close()

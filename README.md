@@ -1,4 +1,7 @@
 # Dense Retrieval with TCT-ColBERT
+The repo is the code for our paper:
+*[Distilling Dense Representations for Ranking
+using Tightly-Coupled Teachers](https://arxiv.org/pdf/2010.11386.pdf)* Sheng-Chieh Lin, Jheng-Hong Yang and Jimmy Lin
 **\*\*\*\*\* Most of the code in this repository was revised from [Passage Re-ranking with BERT repository](https://github.com/nyu-dl/dl4marco-bert).**\*\*\*\*\* 
 
 ## MS Marco Dataset
@@ -84,10 +87,12 @@ Reranking  | Dev
 ------------| :------:
 MRR10            | 0.332
 
+With the model, you can either convert the model to pytorch model conduct dense retrieval using [Pyserini](https://github.com/castorini/pyserini/blob/master/docs/experiments-tct_colbert.md) or directly use our provided reference code below.
+
 ## TCT-ColBERT Embedding Output
 
 ### Msmarco Collection and Dev Queries Tfrecord Conversion
-We first transform Msmarco collection and dev queries to terecord
+We first transform Msmarco collection and dev queries to terecord, and upload the msmarco-passage/tfrecord to $Your_GS_Folder for TPU inference.
 ```shell=bash
 DATA_DIR=./msmarco-passage
 MODEL_DIR=./uncased_L-12_H-768_A-12
@@ -111,7 +116,7 @@ python ./tfrecord_generation/convert_collection_to_tfrecord.py \
 ```
 
 ### TCT-ColBERT Corpus and Query Embedding Output
-To output corpus embedding (with 16 bit), we set default eval_batch_size to 40 and num_tpu_cores to 8. Since the MARCO passage corpus contains 8841823 passages so we split the passages into two tf recrod files, msmarco0.tf (8841800 passages) and msmarco1.tf (23 passages) and then output them saperatley.
+To output corpus embedding (with 16 bit), we set default eval_batch_size to 40 and num_tpu_cores to 8. Since the MARCO passage corpus contains 8841823 passages so we split the passages into two tf recrod files, msmarco0.tf (8841800 passages) and msmarco1.tf (23 passages) and then output them saperatley. It takes within one hour.
 ```shell=bash
 #Output Corpus embeddings
 python train/main.py --use_tpu=True \
@@ -145,12 +150,12 @@ python train/main.py --use_tpu=True \
           --eval_checkpoint=$tct-colbert_checkpoint \
           --output_dir=$output_folder \
           --data_dir=$Your_GS_Folder/msmarco-passage \
-          --embedding_file=queries.dev.small0 \
+          --embedding_file=queries.dev.small \
           --num_tpu_cores=1 \
           --eval_batch_size=20 \
           --doc_type=0 \ # default doc_type 1: Passage; doc_type 0: Query
 ```
-With the output embeddings, you can conduct dense retrieval using your own ANN search implementation, [Pyserini](https://github.com/castorini/pyserini/blob/master/docs/experiments-tct_colbert.md) or our provided reference code.
+
 
 ## Faiss Brute-force search with TCT-ColBERT Embeddings
 
@@ -162,16 +167,16 @@ Indexing all MSMARCO passages in a file (Exhuasive search) requires 26 GB. For e
 
 qerl_file=msmarco-passage/qrels.dev.small.tsv
 topk=1000
-num_files=10 # We currently save 1000,000 passage embeddings in each tf record file; thus total file number for corpus is 10.
+num_files=2 # We currently save passage embeddings into 2 files: msmarco0.tf, msmarco1.tf.
 max_passage_each_index=10,000,000
 num_index=0 # It depends on max_passage_each_index: num_index=8.8M/max_passage_each_index
 data_type=32 # 16 or 32 bits for embedding storage
-corpus_type=passage #doc
+corpus_type=passage 
 index_file=indexes/msmarco_$corpus_type
 gpu_device=0
-query_emb=./query_emb/queries.doc.dev00.tf
-corpus_emb=./corpus_emb/msmarco0
-id_to_query=./queries.dev.small.id
+query_emb=./query_emb/queries.dev.small.tf
+corpus_emb=./corpus_emb/msmarco
+id_to_query=./msmarco-passage/tfrecord/queries.dev.small.id # the lookup id map from query tfrecord generation 
 first_stage_path=first_stage_result
 result_file=./prediction/rank_result
 mkdir prediction indexes $first_stage_path
@@ -183,8 +188,8 @@ python3 ./dr/index.py --num_files $num_files --index_file $index_file \
 # First-stage search with faiss
 for i in {0..$num_index}
 do
-    python ./dr/search.py --offset $i --index_file $index_file\_$i --pickle_file $first_stage_path/result\_$i.pickle\
-        --topk $topk --query_emb_path $query_emb --data_type 32\
+    python ./dr/search.py --offset $i --index_file $index_file\_$i --pickle_file $first_stage_path/result\_$i.pickle \
+        --topk $topk --query_emb_path $query_emb --data_type 32 \
         --query_word_num $query_word_num --emb_dim $emb_dim --batch_size 1 --use_gpu \
         --gpu_device $gpu_device --passage_per_index $max_passage_each_index
 done
@@ -208,13 +213,4 @@ MRR10            | 0.335
 
 
 
-Fetch Pretrained Model
----
-1. Get [gsutil](https://cloud.google.com/storage/docs/quickstart-gsutil) tool
-2. Run following cmds:
-```
-gsutil cp -r gs://tct_colbert/msmarco_distill/model ./
-gsutil cp -r gs://tct_colbert/msmarco_distill/corpus_emb ./
-gsutil cp -r gs://tct_colbert/msmarco_distill/query_emb ./
-```
 

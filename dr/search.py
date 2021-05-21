@@ -132,7 +132,6 @@ def main():
 	parser.add_argument("--pickle_file", type=str, required=True)
 	parser.add_argument("--index_file", type=str, required=True)
 	parser.add_argument("--query_emb_path", type=str)
-	parser.add_argument("--token_classification", default=None, type=str, help='for query reformulation in embedding space')
 	parser.add_argument("--data_type", type=str)
 	parser.add_argument("--use_gpu", action='store_true')
 	parser.add_argument("--gpu_device", type=int, default=0)
@@ -143,26 +142,15 @@ def main():
 									dim=args.emb_dim, data_type=args.data_type)
 
 	query_embs=query_embs.reshape((-1, args.query_word_num, args.emb_dim))
+	query_embs=query_embs.astype(np.float32)
+	query_embs = query_embs.mean(axis=-2)
 
+	Distance, Index = search(query_embs, index_file=args.index_file, batch_size=args.query_word_num*args.batch_size, topk=args.topk, GPU=args.use_gpu, gpu_device=args.gpu_device)
+	Index=Index//args.doc_word_num
+	Index+=args.offset*args.passage_per_index
+	Index = Index.reshape((-1, args.query_word_num*args.topk))
+	Distance = Distance.reshape((-1, args.query_word_num*args.topk))
 
-
-	if args.token_classification==None:
-		query_embs = query_embs.mean(axis=-2)
-		args.query_word_num = 1
-
-		Distance, Index = search(query_embs, index_file=args.index_file, batch_size=args.query_word_num*args.batch_size, topk=args.topk, GPU=args.use_gpu, gpu_device=args.gpu_device)
-		Index=Index//args.doc_word_num
-		Index+=args.offset*args.passage_per_index
-		Index = Index.reshape((-1, args.query_word_num*args.topk))
-		Distance = Distance.reshape((-1, args.query_word_num*args.topk))
-	else:
-		with open(args.token_classification, 'rb') as handle:
-			qid_to_labels = pickle.load(handle)
-		Distance, Index = query_reformulation_and_search(query_embs, index_file=args.index_file, topk=args.topk, qid_to_labels=qid_to_labels, GPU=args.use_gpu)
-		Index=Index//args.doc_word_num
-		Index+=args.offset*args.docs_per_file
-		Index = Index.reshape((-1, args.topk))
-		Distance = Distance.reshape((-1, args.topk))
 
 	save_pickle(Distance, Index, args.pickle_file)
 	print('finish')

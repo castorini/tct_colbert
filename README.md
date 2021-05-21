@@ -2,6 +2,7 @@
 The repo is the code for our paper:
 *[Distilling Dense Representations for Ranking
 using Tightly-Coupled Teachers](https://arxiv.org/pdf/2010.11386.pdf)* Sheng-Chieh Lin, Jheng-Hong Yang and Jimmy Lin
+
 **\*\*\*\*\* Most of the code in this repository was revised from [Passage Re-ranking with BERT repository](https://github.com/nyu-dl/dl4marco-bert).**\*\*\*\*\* 
 
 ## MS Marco Dataset

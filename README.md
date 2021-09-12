@@ -62,9 +62,9 @@ python train/main.py --use_tpu=True \
                --output_dir=$Your_GS_Folder/colbert_checkpoint \
 ```
 The ColBERT re-ranking result:
-Reranking  | Dev
-------------| :------:
-MRR10            | 0.350
+Reranking  | Dev |
+| ------------ | ----------- |
+MRR10            | 0.350 |
 
 After training ColBERT, we then set $colbert_checkpoint to the ColBERT checkpoint and start training TCT-ColBERT. Note that the training step setting 160K is the one used in our Arxiv paper, [Distilling Dense Representations for Ranking using Tightly-Coupled Teachers](https://arxiv.org/pdf/2010.11386.pdf). In this paper, [In-Batch Negatives for Knowledge Distillation with Tightly-Coupled
 Teachers for Dense Retrieval](https://aclanthology.org/2021.repl4nlp-1.17/), we train TCT-ColBERT for 500K steps and got even better results.
@@ -84,9 +84,9 @@ python train/main.py --use_tpu=True \
                --output_dir=$Your_GS_Folder/tct-colbert_checkpoint \
 ```
 The TCT-ColBERT re-ranking result:
-Reranking  | Dev
-------------| :------:
-MRR10            | 0.332
+|Reranking  | Dev |
+| ------------ | ----------- |
+|MRR10            | 0.332 |
 
 With the model, you can either convert the model to pytorch model conduct dense retrieval using [Pyserini](https://github.com/castorini/pyserini/blob/master/docs/experiments-tct_colbert.md) or directly use our provided reference code below.
 

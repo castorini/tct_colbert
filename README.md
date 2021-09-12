@@ -97,6 +97,7 @@ We first transform Msmarco collection and dev queries to tfrecord.
 ```shell=bash
 export DATA_DIR=./msmarco-passage
 export MODEL_DIR=./uncased_L-12_H-768_A-12
+export QUERY_NAME=queries.dev.small
 # We first split the collection into 10 parts
 split -d -l 1000000 ${DATA_DIR}/collection.tsv ${DATA_DIR}/collection.part
 # Convert passages in the collection
@@ -112,9 +113,9 @@ python ./tfrecord_generation/convert_collection_to_tfrecord.py \
   --output_folder=${DATA_DIR}/query_tfrecord \
   --vocab_file=${MODEL_DIR}/vocab.txt \
   --max_seq_length=36 \
-  --corpus_path=${DATA_DIR}/queries.dev.small.tsv \
+  --corpus_path=${DATA_DIR}/${QUERY_NAME}.tsv \
   --doc_type=query \
-  --output_filename=queries.dev.small
+  --output_filename=q${QUERY_NAME}
 ```
 
 ### TCT-ColBERT Corpus and Query Embedding Output
@@ -165,6 +166,7 @@ Indexing all MSMARCO passages in a file (Exhuasive search) requires 26 GB. For e
 ```shell=bash
 export CORPUS_EMB=./msmarco-passage/doc_emb
 export QUERY_EMB=./msmarco-passage/query_emb
+export QUERY_NAME=queries.dev.small
 export INDEX_PATH=./msmarco-passage/indexes
 exprot DATA_DIR=./msmarco-passage
 export INTERMEDIATE_PATH=./msmarco-passage/intermediate
@@ -178,7 +180,7 @@ python ./dr/index.py --index_path ${INDEX_PATH} \
 for index in ${INDEX_PATH}/*
 do
     python ./dr/search.py --index_file $index --intermediate_path ${INTERMEDIATE_PATH} \
-          --topk 1000 --query_emb_path ${QUERY_EMB}/embeddings-${Query}.tf \
+          --topk 1000 --query_emb_path ${QUERY_EMB}/embeddings-${QUERY_NAME}.tf \
           --batch_size 144 --threads 36
 done
 
@@ -194,9 +196,8 @@ python3 ./eval/msmarco_eval.py \
 
 ```
 The TCT-ColBERT retrieval result:
-Retrieval  | Dev
-------------| :------:
-MRR10            | 0.335
+Retrieval  | Dev |
+MRR10      | 0.335 |
 
 
 

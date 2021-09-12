@@ -4,14 +4,18 @@ that will be consumed by BERT.
 """
 import collections
 import os
+import glob
 import re
 import tensorflow.compat.v1 as tf
 import time
 # local module
 import tokenization
 import math
-# import spacy; from spacy.lang.en import English; nlp = English()
-# nlp.add_pipe(nlp.create_pipe('sentencizer'))
+from tqdm import tqdm
+from read_data import msmarco_corpus
+from multiprocessing import Pool
+import multiprocessing
+
 
 
 flags = tf.flags
@@ -29,22 +33,24 @@ flags.DEFINE_string(
     "The vocabulary file that the BERT model was trained on.")
 
 flags.DEFINE_string(
-    "corpus",
-    "msmarco",
-    "Path to the MSMARCO training dataset containing the tab separated "
-    "<query, positive_paragraph, negative_paragraph> tuples.")
-
-flags.DEFINE_bool(
-    "dry_run",
-    False,
-    "Path to the MSMARCO training dataset containing the tab separated "
-    "<query, positive_paragraph, negative_paragraph> tuples.")
+    "output_filename",
+    None,
+    "output filename")
 
 flags.DEFINE_string(
     "corpus_path",
     "./data/top1000.dev.tsv",
     "Path to the MSMARCO training dataset containing the tab separated "
     "<query, positive_paragraph, negative_paragraph> tuples.")
+
+flags.DEFINE_string(
+    "corpus_prefix",
+    None,
+    "corpus name prefix")
+flags.DEFINE_string(
+    "meta",
+    "content",
+    "meta information used to generate corpus")
 
 flags.DEFINE_integer(
     "max_seq_length", 512,
@@ -56,23 +62,31 @@ flags.DEFINE_string(
     "doc_type", "doc",
     "Denote the type of document, either doc or query")
 
+flags.DEFINE_integer(
+    "batch_size", 100,
+    "batch size for inference. We need to store the remaining to the last file ")
 
 flags.DEFINE_integer(
     "num_eval_docs", 1000,
     "The maximum number of docs per query for dev and eval sets.")
 
 flags.DEFINE_integer(
-    "max_seg", 4,
-    "The maximum number of docs per query for dev and eval sets.")
+    "workers", None,
+    "if None, workers are equal to number of files.")
+
+if os.path.isdir(FLAGS.corpus_path):
+    assert FLAGS.corpus_prefix != None, "You have to input corpus_prefix arg"
+    if FLAGS.output_filename==None:
+      FLAGS.output_filename = FLAGS.corpus_prefix
+else:
+  if FLAGS.output_filename==None:
+    output_filename = FLAGS.corpus_path.split('/')[-1]
+    FLAGS.output_filename = '.'.join(output_filename.split('.')[:-1])
 
 
 def write_to_tf_record(writer, tokenizer, doc_text,
                       docid, doc_type):
-  if doc_type=='doc':
-    doc_ids = tokenization.convert_to_colbert_input(
-        text=['[','d',']']+doc_text, max_seq_length=FLAGS.max_seq_length, tokenizer=tokenizer,
-        add_cls=True, padding_mask=False, tokenize=False)
-  elif doc_type=="passage":
+  if doc_type=="passage":
     doc_ids = tokenization.convert_to_colbert_input(
         text='[D] '+doc_text, max_seq_length=FLAGS.max_seq_length, tokenizer=tokenizer,
         add_cls=True, padding_mask=False)
@@ -98,46 +112,37 @@ def write_to_tf_record(writer, tokenizer, doc_text,
   writer.write(example.SerializeToString())
 
 
-def convert_passage_corpus(corpus, tokenizer, doc_type):
-  print('Counting number of documents...')
-  num_lines = sum(1 for line in open(FLAGS.corpus_path, 'r'))
-  print('{} passages found.'.format(num_lines))
+def convert_corpus(corpus_path, meta, output_filename, tokenizer, doc_type, offset=0, dummy_line=0):
 
-  remain = num_lines%40
-  if doc_type=='query':
-    remain = 0
-  print('Converting {} to tfrecord...'.format(FLAGS.corpus_path))
-  start_time = time.time()
-  docids=[]
-  docs=[]
-  with open(FLAGS.corpus_path) as f:
-      for line in f:
-        try:
-          docid, doc = line.strip().split('\t')
-        except:
-          doc=[]
-          for i, content in enumerate(line.strip().split('\t')):
-            if i==0:
-              docid=content
-            else:
-              doc.append(content)
+  corpus = msmarco_corpus(corpus_path, meta)
+  num_lines = corpus.num
+  print('{} lines found.'.format(num_lines))
 
-          doc=' '.join(doc)
-        docids.append(docid)
-        docs.append(doc)
+  # remain = num_lines%40
+  # if doc_type=='query':
+  #   remain = 0
+  print('Converting {} to tfrecord...'.format(corpus_path))
+  
 
   counter=0
-  id_writer = open(FLAGS.output_folder + '/'+ corpus + '.id', 'w')
+  id_writer = open(os.path.join(output_filename + '.id'), 'w')
+  # if doc_type=='query': # We assume there are not so many query for inference
   writer = tf.python_io.TFRecordWriter(
-      FLAGS.output_folder + '/'+ corpus + str(counter) +'.tf')
+      os.path.join(output_filename +'.tf'))
+  # else:
+  #   writer = tf.python_io.TFRecordWriter(
+  #       os.path.join(output_filename +'.tf'))
 
-  for i, doc in enumerate(docs):
+  gen_corpus = corpus.output()
+  start_time = time.time()
+  i = offset
+  for (docid, doc) in tqdm(gen_corpus):
 
-    if (i % (num_lines-remain) == 0) and (i!=0): #8841800
-      writer.close()
-      counter+=1
-      writer = tf.python_io.TFRecordWriter(
-        FLAGS.output_folder + '/'+ corpus + str(counter) +'.tf')
+    # if (i % (num_lines-remain) == 0) and (i!=0):
+    #   writer.close()
+    #   counter+=1
+    #   writer = tf.python_io.TFRecordWriter(
+    #     os.path.join(output_filename +'.tf'))
 
 
     write_to_tf_record(writer=writer,
@@ -146,119 +151,37 @@ def convert_passage_corpus(corpus, tokenizer, doc_type):
                        docid=i,
                        doc_type=doc_type)
 
-    id_writer.write('%d\t%s\n'%(i,docids[i]))
-    if (i+1) % 1000000 == 0:
-      print('Writing {} corpus, doc {} of {}'.format(
-          corpus, i, len(docs)))
-      time_passed = time.time() - start_time
-      hours_remaining = (
-          len(docs) - i) * time_passed / (max(1.0, i) * 3600)
-      print('Estimated hours remaining to write the {} corpus: {}'.format(
-          corpus, hours_remaining))
+    id_writer.write('%d\t%s\n'%(i,docid))
+    i+=1
+    # if ((i+1) % max_num_doc) == 0:
+    #   print('Writing {} corpus, doc {} of {}'.format(
+    #       output_filename, i, num_lines))
+    #   time_passed = time.time() - start_time
+    #   hours_remaining = (
+    #       num_lines - i) * time_passed / (max(1.0, i) * 3600)
+    #   print('Estimated hours remaining to write the {} corpus: {}'.format(
+    #       output_filename, hours_remaining))
+    #   counter+=1
+      # writer.close()
+      # writer = tf.python_io.TFRecordWriter(
+      #   os.path.join(output_filename + '-' + str(counter) +'.tf'))
+  if dummy_line>0:
+    print('fill {} dummy lines'.format(dummy_line))
+    for l in range(dummy_line):
+      write_to_tf_record(writer=writer,
+                       tokenizer=tokenizer,
+                       doc_text='\t',
+                       docid=-1,
+                       doc_type=doc_type)
+
+      # id_writer.write('%d\t%s\n'%(i,docid))
+      # i+=1
 
   writer.close()
   id_writer.close()
 
 
-def convert_doc_corpus(corpus, tokenizer, doc_type, seg_length, max_seg):
 
-  def aggregate_passages(doc, seg_length):
-    passages = []
-    tokens = tokenizer.tokenize(doc)
-    token_len = len(tokens)
-    seg_num = math.ceil(token_len/seg_length)
-    for i in range(seg_num):
-      passages.append(tokens[i*seg_length:(i+1)*seg_length])
-    return passages
-
-  print('Converting {} to tfrecord...'.format(FLAGS.corpus_path))
-
-  print('Counting number of documents...')
-  num_lines = sum(1 for line in open(FLAGS.corpus_path, 'r'))
-  print('{} documents found.'.format(num_lines))
-  start_time = time.time()
-
-  if not FLAGS.dry_run:
-    counter=0
-    writer = tf.python_io.TFRecordWriter(
-        FLAGS.output_folder + '/'+ corpus + str(counter) +'.tf')
-    id_writer = open(FLAGS.output_folder + '/'+ corpus + '.id', 'w')
-    num_id=0
-    with open(FLAGS.corpus_path) as f:
-      for doc_num, line in enumerate(f):
-
-        content = line.strip().split('\t') #docid, url, title, doc
-
-        docid = content[0]
-        doc = ' '.join(content[1:])
-
-
-        passages = aggregate_passages(doc, seg_length-4)
-
-        # if len(passages)>1:
-        #   print('check')
-
-        for passage in passages[:max_seg]:
-          write_to_tf_record(writer=writer,
-                             tokenizer=tokenizer,
-                             doc_text=passage,
-                             docid=num_id,
-                             doc_type=doc_type)
-
-          id_writer.write('%d\t%s\n'%(num_id, docid))
-          if (num_id+1) % 1000000 == 0:
-            print('Writing {} corpus, doc {}, passage {} of {}'.format(
-                corpus, doc_num, num_id, num_lines))
-            time_passed = time.time() - start_time
-            hours_remaining = (
-                num_lines - doc_num) * time_passed / (max(1.0, doc_num) * 3600)
-            print('Estimated hours remaining to write the {} corpus: {}'.format(
-                corpus, hours_remaining))
-
-          num_id+=1
-
-          if (((num_id+1) % 7651000) == 0): #(chunk_len, max_seg): (154X16) 23654360+19 (256X8)
-            print('New')
-            writer.close()
-            counter+=1
-            writer = tf.python_io.TFRecordWriter(
-              FLAGS.output_folder + '/'+ corpus + str(counter) +'.tf')
-      writer.close()
-      id_writer.close()
-      print('total '+ str(num_id) + ' passages')
-      print('finish')
-  else:
-    counter=0
-    num_id=0
-    with open(FLAGS.corpus_path) as f:
-      for doc_num, line in enumerate(f):
-
-        content = line.strip().split('\t') #docid, url, title, doc
-        docid = content[0]
-        doc = ' '.join(content[1:])
-
-
-        passages = aggregate_passages(doc, seg_length-4)
-
-
-        for passage in passages[:max_seg]:
-
-          if (num_id+1) % 1000000 == 0:
-            print('Writing {} corpus, doc {}, passage {} of {}'.format(
-                corpus, doc_num, num_id, num_lines))
-            time_passed = time.time() - start_time
-            hours_remaining = (
-                num_lines - doc_num) * time_passed / (max(1.0, doc_num) * 3600)
-            print('Estimated hours remaining to write the {} corpus: {}'.format(
-                corpus, hours_remaining))
-
-          num_id+=1
-
-
-
-      print('total '+ str(num_id) + ' passages')
-      print('split '+ str(num_id-num_id%40) + '/' + str(num_id%40) + ' passages')
-      print('finish')
 
 def main():
 
@@ -269,13 +192,57 @@ def main():
   if not os.path.exists(FLAGS.output_folder):
     os.mkdir(FLAGS.output_folder)
 
-  if FLAGS.doc_type!='doc': #passage or query
-    convert_passage_corpus(corpus=FLAGS.corpus, tokenizer=tokenizer, doc_type=FLAGS.doc_type)
-    print('Done!')
+
+  
+  if os.path.isdir(FLAGS.corpus_path):
+    files = glob.glob(os.path.join(FLAGS.corpus_path, FLAGS.corpus_prefix + '*'))
   else:
-    convert_doc_corpus(corpus=FLAGS.corpus, tokenizer=tokenizer, doc_type=FLAGS.doc_type, seg_length=FLAGS.max_seq_length\
-      , max_seg=FLAGS.max_seg)
-    print('Done!')
+    files = [FLAGS.corpus_path]
+
+  print('Count num of line')
+  file_to_line_numer = {}
+  for file in files:
+    file_to_line_numer[file] = sum(1 for line in open(file))
+  
+  num_files = len(files)
+  if (FLAGS.workers==None) or (FLAGS.workers >= num_files):
+    num_workers = num_files
+  else:
+    num_workers = FLAGS.workers
+  if num_workers>1:
+    pool = Pool(num_workers)
+    num_files_per_worker=num_files//num_workers
+    offset = 0
+    file_list = []
+    for i in range(num_workers):
+        f_out = os.path.join(FLAGS.output_folder, FLAGS.output_filename + '-' + str(i)) 
+        for file in file_list:
+          offset+=file_to_line_numer[file]
+
+        if i==(num_workers-1): #last thread
+            file_list = files[i*num_files_per_worker:]
+            total_line_number = 0
+            for file in file_list:
+              total_line_number += file_to_line_numer[file]
+            dummy_line = FLAGS.batch_size - total_line_number%(FLAGS.batch_size)
+        else:
+            file_list = files[i*num_files_per_worker:((i+1)*num_files_per_worker)]
+            dummy_line = 0
+
+        pool.apply_async(convert_corpus ,(file_list, FLAGS.meta, f_out, tokenizer, FLAGS.doc_type, offset, dummy_line))
+    pool.close()
+    pool.join()
+    # f_out = os.path.join(FLAGS.output_folder, FLAGS.output_filename) 
+    # convert_corpus(corpus_path=files, meta=FLAGS.meta, output_filename=f_out, tokenizer=tokenizer, doc_type=FLAGS.doc_type)
+  else:
+    if FLAGS.doc_type=='query':
+      dummy_line=0
+    else:
+      dummy_line = FLAGS.batch_size - total_line_number%(FLAGS.batch_size)
+    f_out = os.path.join(FLAGS.output_folder, FLAGS.output_filename) 
+    convert_corpus(corpus_path=files, meta=FLAGS.meta, output_filename=f_out, tokenizer=tokenizer, doc_type=FLAGS.doc_type, offset=0, dummy_line=dummy_line)
+  print('Done!')
+
 
 if __name__ == '__main__':
   main()

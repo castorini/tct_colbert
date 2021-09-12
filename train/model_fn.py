@@ -131,48 +131,20 @@ def create_model(bert_config, is_training, is_eval, is_output, input_ids, input_
 			tct_student_loss, tct_student_logits, tct_student_margins = batch_max_sim_softmax_loss(query_pooling_emb, doc0_pooling_emb, doc1_pooling_emb, 4*batch_size) #
 			tct_student_logits = tf.nn.softmax(tct_student_logits, axis=-1)
 
-			# tct_teacher_logits, tct_teacher_margins = compute_max_sim(query_emb, doc0_emb, doc1_emb)
-			# tct_teacher_logits = tf.nn.softmax(tct_teacher_logits*temperature, axis=-1)
-			# tct_student_logits, tct_student_margins = compute_max_sim(query_pooling_emb, doc0_pooling_emb, doc1_pooling_emb) #
-			# tct_student_logits = tf.nn.softmax(tct_student_logits, axis=-1)
 
 			tct_teacher_student_kl_loss = kl(tct_teacher_logits, tct_student_logits)
 			
-			# tct_teacher_student_mse_loss = tf.keras.losses.MSE(tct_teacher_margins, tct_student_margins)
-			# teacher_margins = label
-			# teacher_logits = tf.reshape(teacher_margins, (batch_size, -1)) # batch, 1
-			# teacher_logits = tf.concat([teacher_logits, tf.zeros([batch_size, 1], dtype=tf.float32)], axis=1 ) # batch, 2
-			# teacher_logits = tf.nn.softmax(teacher_logits, axis=-1)
-			# student_logits, student_margins = compute_max_sim(query_pooling_emb, doc0_pooling_emb, doc1_pooling_emb)
-			# student_logits = tf.nn.softmax(student_logits, axis=-1)
-			# teacher_student_kl_loss = kl(teacher_logits, student_logits)
-			# teacher_student_mse_loss = tf.keras.losses.MSE(teacher_margins, student_margins)
+
 
 			if train_model =='teacher':
 				loss = tf.reduce_mean(tct_teacher_loss)
 			elif train_model =='student':
 				loss = tf.reduce_mean(tct_teacher_student_kl_loss)
-				# if loss=='mse':
-				# 	if kd_source=='colbert':
-				# 		loss = tf.reduce_mean(tct_teacher_student_mse_loss)
-				# 	elif kd_source=='label':
-				# 		loss = tf.reduce_mean(teacher_student_mse_loss)
-				# 	elif kd_source=='combine':
-				# 		loss = 0.5*tf.reduce_mean(tct_teacher_student_mse_loss) + 0.5*tf.reduce_mean(teacher_student_mse_loss)
-				# elif loss=='kl':
-				# 	if kd_source=='colbert':
-				# 		loss = tf.reduce_mean(teacher_student_kl_loss)
-				# 	elif kd_source=='label':
-				# 		loss = tf.reduce_mean(tct_student_loss)
-				# 	elif kd_source=='combine':
-				# 		loss = 0.5*tf.reduce_mean(tct_teacher_student_kl_loss) + 0.5*tf.reduce_mean(teacher_student_kl_loss)
 
 		else:
 			if eval_model=='student':
-				# Student
 				score = compute_max_sim_score([query_pooling_emb], [doc0_pooling_emb])
 			elif eval_model=='teacher':
-				# Teacher
 				score = compute_max_sim_score([query_emb], [doc0_emb])
 		return loss, score, query_length
 
@@ -238,13 +210,14 @@ def model_fn_builder(bert_config, init_checkpoint, learning_rate,
 				assignment_maps = [assignment_map, assignment_map1]
 				initialized_variable_names.update(initialized_variable_names1)
 			elif train_model == 'student':
-				(assignment_map, initialized_variable_names)= modeling.get_assignment_map_from_checkpoint(tvars, init_checkpoint)
-				(assignment_map1, initialized_variable_names1)= modeling.get_assignment_map_from_checkpoint(tvars, init_checkpoint, 'Teacher/', 'Student/')
-				assignment_maps = [assignment_map, assignment_map1]
-				initialized_variable_names.update(initialized_variable_names1)
-				#if you don't want to initialize student with colbert checkpoint use the below one
+				#Our original setting initializes student with colbert checkpoint; however, it is not necessary.
 				# (assignment_map, initialized_variable_names)= modeling.get_assignment_map_from_checkpoint(tvars, init_checkpoint)
-				# assignment_maps = [assignment_map]
+				# (assignment_map1, initialized_variable_names1)= modeling.get_assignment_map_from_checkpoint(tvars, init_checkpoint, 'Teacher/', 'Student/')
+				# assignment_maps = [assignment_map, assignment_map1]
+				# initialized_variable_names.update(initialized_variable_names1)
+				#if you don't want to initialize student with colbert checkpoint use the below one
+				(assignment_map, initialized_variable_names)= modeling.get_assignment_map_from_checkpoint(tvars, init_checkpoint)
+				assignment_maps = [assignment_map]
 
 			tf.logging.info("**** Assignment Map ****")
 			if use_tpu:

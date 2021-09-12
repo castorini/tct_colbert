@@ -3,7 +3,7 @@ import pickle
 import glob
 import os
 import numpy as np
-from util import load_tfrecords, read_id_dict, read_pickle, write_result
+from util import read_id_dict, read_pickle, write_result
 from progressbar import *
 
 
@@ -36,7 +36,7 @@ def dedupe_index(Index, Score):
 
 def main():
 	parser = argparse.ArgumentParser()
-	parser.add_argument("--first_stage_path", type=str)
+	parser.add_argument("--intermediate_path", type=str)
 	parser.add_argument("--result_file", type=str)
 	parser.add_argument("--docs_per_file", type=int, default=1000000)
 	parser.add_argument("--doc_word_num", type=int, default=1)
@@ -44,9 +44,7 @@ def main():
 	parser.add_argument("--query_word_num", type=int, default=1)
 	parser.add_argument("--topk", type=int, default=1000)
 	parser.add_argument("--emb_dim", type=int, default=768)
-	parser.add_argument("--emb_path", type=str)
-	parser.add_argument("--data_type", type=str)
-	parser.add_argument("--rerank", action='store_true')
+	parser.add_argument("--data_type", type=str, default=16)
 	parser.add_argument("--id_to_doc_path", type=str, default=None)
 	parser.add_argument("--id_to_query_path", type=str, default=None)
 	parser.add_argument("--corpus_type", type=str, default='passage')
@@ -65,7 +63,7 @@ def main():
 
 	Score=None
 	Index=None
-	for filename in glob.glob(os.path.join(args.first_stage_path, '*.pickle')): #result1
+	for filename in glob.glob(os.path.join(args.intermediate_path, '*')):
 		S, I=read_pickle(filename)
 		try:
 			Score = np.concatenate([Score, S], axis=1)
@@ -84,6 +82,7 @@ def main():
 		Index = np.array(new_index)
 
 	print("Dedupe...")
+
 	Index, Score, max_index_num=dedupe_index(Index, Score)
 
 	write_result(qidxs, Index, Score, args.result_file, idx_to_qid, idx_to_docid, args.topk)

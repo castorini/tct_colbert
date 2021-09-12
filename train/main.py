@@ -6,10 +6,11 @@ import time
 import os
 import numpy as np
 import tensorflow as tf
+# import tensorflow.compat.v1 as tf
 from model_fn import create_bert, create_model, model_fn_builder, input_fn_builder
 import metrics
 import modeling
-
+from tqdm import tqdm
 
 flags = tf.flags
 FLAGS = flags.FLAGS
@@ -59,7 +60,7 @@ flags.DEFINE_string(
 	'msmarco_predictions_dev.tsv', None)
 flags.DEFINE_string(
 	'init_checkpoint',
-	'bert_model.ckpt', None)
+	None, None)
 flags.DEFINE_string(
 	'eval_checkpoint',None, None)
 flags.DEFINE_string(
@@ -67,7 +68,7 @@ flags.DEFINE_string(
 flags.DEFINE_integer(
 	"train_batch_size", 96, None)
 flags.DEFINE_integer(
-	"eval_batch_size", 40, None)
+	"eval_batch_size", 100, None)
 flags.DEFINE_float(
 	"learning_rate", 7e-6, None)
 flags.DEFINE_integer(
@@ -144,6 +145,9 @@ EVAL_CHECKPOINT = FLAGS.eval_checkpoint
 MSMARCO_OUTPUT = True  # Write the predictions to a MS-MARCO-formatted file.
 DOC_TYPE = FLAGS.doc_type
 
+if INIT_CHECKPOINT==None:
+	INIT_CHECKPOINT = EVAL_CHECKPOINT
+
 if DO_EVAL:
 	METRICS_MAP = ['MAP', 'RPrec', 'NDCG', 'MRR', 'MRR@10']
 
@@ -151,7 +155,10 @@ if DO_OUTPUT:
 	if FLAGS.embedding_file==None:
 		raise ValueError('Input embedding file for output')
 	else:
+		tf.gfile.MkDir(OUTPUT_DIR)
 		EMBEDDING_FILE = FLAGS.embedding_file
+		split = EMBEDDING_FILE.split('-')[-1]
+		output_emb_file = os.path.join(OUTPUT_DIR, "embeddings-"+ str(split) + ".tf")
 
 
 
@@ -330,10 +337,6 @@ def main(_):
 		tf.logging.info(all_metrics)
 
 	if DO_OUTPUT:
-		# for i, set_name in enumerate(File_list): #, "queries.dev0", "msmarco0", "msmarco1"
-			# DOC_ID = DOC_ID_list[i]
-			# NUM_TPU_COREs = NUM_TPU_COREs_list[i]
-			# EVAL_BATCH_SIZE = EVAL_BATCH_SIZE_list[i]
 
 		tf.logging.info("***** Output Embedding:"+ EMBEDDING_FILE + "*****")
 		tf.logging.info("  Batch size = %d", EVAL_BATCH_SIZE)
@@ -350,10 +353,9 @@ def main(_):
 			max_eval_examples=max_eval_examples)
 
 		counter=0
-		counter1=0
+		
 		if MSMARCO_OUTPUT:
-			writer = tf.python_io.TFRecordWriter(
-				OUTPUT_DIR + "/" + EMBEDDING_FILE + str(counter1) +".tf")
+			writer = tf.python_io.TFRecordWriter(output_emb_file)
 
 
 		# ***IMPORTANT NOTE***
@@ -370,19 +372,15 @@ def main(_):
 		start_time = time.time()
 		results = []
 
-		for item in result:
+		for item in tqdm(result):
 			embedding=item["contextual_embeddings"] #a list of layer embedding with size (layer_num, seq_length, hidden_size)
 			docid=item["docid"]
 
 
-
+			#save as 16bits
 			embedding = embedding.astype('float16')
-			# if DOC_ID ==0:
 			sentence_embedding = embedding.reshape(-1).tostring()
 			embedding_tf = tf.train.Feature(bytes_list=tf.train.BytesList(value=[sentence_embedding]))
-			# if DOC_ID ==1:
-			# 	sentence_embedding = embedding.reshape(-1).tostring()
-			# 	embedding_tf = tf.train.Feature(bytes_list=tf.train.BytesList(value=[sentence_embedding]))
 
 
 			docid_tf = tf.train.Feature(
@@ -397,19 +395,19 @@ def main(_):
 			example = tf.train.Example(features=features)
 			writer.write(example.SerializeToString())
 
-			# counter+=1
+			counter+=1
 			if (counter%100000==0):
 				tf.logging.warn("Read {} examples in {} secs.".format(
-					counter+Save_SAMPLE_NUM*counter1, int(time.time() - start_time)))
+					counter, int(time.time() - start_time)))
 
-			if counter==Save_SAMPLE_NUM :
-				writer.close()
-				counter=0
-				counter1+=1
-				writer = tf.python_io.TFRecordWriter(
-					OUTPUT_DIR + "/" + EMBEDDING_FILE + ".tf")
-				tf.logging.warn("Output next {} examples".format(
-					Save_SAMPLE_NUM))
+			# if counter==Save_SAMPLE_NUM :
+				# writer.close()
+				# counter=0
+				# counter1+=1
+				# writer = tf.python_io.TFRecordWriter(
+				# 	output_emb_file)
+				# tf.logging.warn("Output next {} examples".format(
+				# 	Save_SAMPLE_NUM))
 		writer.close()
 
 

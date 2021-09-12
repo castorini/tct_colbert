@@ -197,6 +197,7 @@ python3 ./eval/msmarco_eval.py \
 ```
 The TCT-ColBERT retrieval result:
 Retrieval  | Dev |
+| ------------ | ----------- |
 MRR10      | 0.335 |
 
 

@@ -26,7 +26,7 @@ Here we set max passage length 150 plus 4 tokens '[CLS]', '[', 'D', ']', and max
 exprot DATA_DIR=./msmarco-passage
 export MODEL_DIR=./uncased_L-12_H-768_A-12
 # Generate training data
-python ./tfrecord_generation/convert_msmarco_to_tfrecord_tower.py \
+python ./tct_colbert/tfrecord_generation/convert_msmarco_to_tfrecord_tower.py \
   --output_folder=${DATA_DIR}/tfrecord \
   --vocab_file=${MODEL_DIR}/vocab.txt \
   --max_query_length=36\
@@ -34,7 +34,7 @@ python ./tfrecord_generation/convert_msmarco_to_tfrecord_tower.py \
   --num_eval_docs=1000 \
   --train_dataset_path=msmarco-passage/triples.train.small.tsv \
 # Generate dev set for re-ranking
-python ./tfrecord_generation/convert_msmarco_to_tfrecord_tower.py \
+python ./tct_colbert/tfrecord_generation/convert_msmarco_to_tfrecord_tower.py \
   --output_folder=${DATA_DIR}/tfrecord \
   --vocab_file=${MODEL_DIR}/vocab.txt \
   --max_query_length=36\
@@ -47,7 +47,7 @@ python ./tfrecord_generation/convert_msmarco_to_tfrecord_tower.py \
 ## TCT-ColBERT Training
 To train TCT-ColBERT, first upload msmarco-passage/tfrecord to $Your_GS_Folder. Also upload BERT-based model ,[uncased_L-12_H-768_A-12](https://storage.googleapis.com/bert_models/2020_02_20/uncased_L-12_H-768_A-12.zip), as well. Then, we can start to train our teacher model ColBERT! If do_eval set True, we also use the trained bi-encoder to rerank the Msmarco dev set. If using GPU, set use_tpu=False and remove tpu_address option.
 ```shell=bash
-python train/main.py --use_tpu=True \
+python ./tct_colbert/train/main.py --use_tpu=True \
                --tpu_address=$tpu_address \
                --do_train=True \
                --do_eval=True \
@@ -69,7 +69,7 @@ The ColBERT re-ranking result:
 After training ColBERT, we then set $colbert_checkpoint to the ColBERT checkpoint and start training TCT-ColBERT. Note that the training step setting 160K is the one used in our Arxiv paper, [Distilling Dense Representations for Ranking using Tightly-Coupled Teachers](https://arxiv.org/pdf/2010.11386.pdf). In this paper, [In-Batch Negatives for Knowledge Distillation with Tightly-Coupled
 Teachers for Dense Retrieval](https://aclanthology.org/2021.repl4nlp-1.17/), we train TCT-ColBERT for 500K steps and got even better results.
 ```shell=bash
-python train/main.py --use_tpu=True \
+python ./tct_colbert/train/main.py --use_tpu=True \
                --tpu_address=$tpu_address \
                --do_train=True \
                --do_eval=True \
@@ -101,7 +101,7 @@ export QUERY_NAME=queries.dev.small
 # We first split the collection into 10 parts
 split -d -l 1000000 ${DATA_DIR}/collection.tsv ${DATA_DIR}/collection.part
 # Convert passages in the collection
-python ./tfrecord_generation/convert_collection_to_tfrecord.py \
+python ./tct_colbert/tfrecord_generation/convert_collection_to_tfrecord.py \
   --output_folder=${DATA_DIR}/corpus_tfrecord \
   --vocab_file=${MODEL_DIR}/vocab.txt \
   --max_seq_length=154 \
@@ -109,7 +109,7 @@ python ./tfrecord_generation/convert_collection_to_tfrecord.py \
   --corpus_prefix=collection.part \
   --doc_type=passage \
 # Convert queries in dev set
-python ./tfrecord_generation/convert_collection_to_tfrecord.py \
+python ./tct_colbert/tfrecord_generation/convert_collection_to_tfrecord.py \
   --output_folder=${DATA_DIR}/query_tfrecord \
   --vocab_file=${MODEL_DIR}/vocab.txt \
   --max_seq_length=36 \
@@ -126,7 +126,7 @@ export MODEL_DIR=./uncased_L-12_H-768_A-12
 for i in $(seq -f "%01g" 0 9)
 do
   srun --gres=gpu:p100:1 --mem=16G --cpus-per-task=2 --time=2:00:00 \
-  python train/main.py --use_tpu=False \
+  python ./tct_colbert/train/main.py --use_tpu=False \
                  --tpu_address=$tpu_address \
                  --do_output=True \
                  --eval_model=student \
@@ -142,7 +142,7 @@ done
 
 
 # Output Query embeddings
-python train/main.py --use_tpu=False \
+python ./tct_colbert/train/main.py --use_tpu=False \
           --tpu_address=$tpu_address \
           --do_output=True \
           --eval_model=student \
@@ -172,27 +172,27 @@ exprot DATA_DIR=./msmarco-passage
 export INTERMEDIATE_PATH=./msmarco-passage/intermediate
 ###############################################
 # indexing using faiss
-python ./dr/index.py --index_path ${INDEX_PATH} \
+python ./tct_colbert/retrieval/index.py --index_path ${INDEX_PATH} \
      --corpus_emb_path ${CORPUS_EMB} --passages_per_file 1000000 \
 
 # First-stage search with Faiss
 
 for index in ${INDEX_PATH}/*
 do
-    python ./dr/search.py --index_file $index --intermediate_path ${INTERMEDIATE_PATH} \
+    python ./tct_colbert/retrieval/dense.search.py --index_file $index --intermediate_path ${INTERMEDIATE_PATH} \
           --topk 1000 --query_emb_path ${QUERY_EMB}/embeddings-${QUERY_NAME}.tf \
           --batch_size 144 --threads 36
 done
 
 # Merge and output final result
-python ./dr/output_result.py --topk 1000 --intermediate_path ${INTERMEDIATE_PATH} \
-                         --result_file result.tsv \
+python ./tct_colbert/retrieval/merge.result.py --topk 1000 --intermediate_path ${INTERMEDIATE_PATH} \
+                         --result_file result.trec \
                          --id_to_doc_path ${DATA_DIR}/corpus_tfrecord \
                          --id_to_query_path ${DATA_DIR}/query_tfrecord
 
 # Evaluation
-python3 ./eval/msmarco_eval.py \
- qrels.dev.small.tsv result.tsv
+python -m pyserini.eval.trec_eval -c -M 10 -m recip_rank \
+ qrels.dev.small.tsv result.trec
 
 ```
 The TCT-ColBERT retrieval result:

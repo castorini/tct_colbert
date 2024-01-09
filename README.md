@@ -23,7 +23,7 @@ unzip uncased_L-24_H-1024_A-16.zip
 ## Convert Msmarco Train and dev set to Tfrecord
 Here we set max passage length 150 plus 4 tokens '[CLS]', '[', 'D', ']', and max query length 32 plus 4 tokens '[CLS]', '[', 'Q', ']'.
 ```shell=bash
-exprot DATA_DIR=./msmarco-passage
+export DATA_DIR=./msmarco-passage
 export MODEL_DIR=./uncased_L-12_H-768_A-12
 # Generate training data
 python ./tct_colbert/tfrecord_generation/convert_msmarco_to_tfrecord_tower.py \
